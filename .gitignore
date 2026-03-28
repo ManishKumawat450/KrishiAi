@@ -1,0 +1,10 @@
+# Node.js
+
+# Dependency directories
+node_modules/
+
+# dotenv environment variable file
+.env
+
+# Build output
+/dist/
