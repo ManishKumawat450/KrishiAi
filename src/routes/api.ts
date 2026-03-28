@@ -1,58 +1,411 @@
-import express from 'express';
+import express, { Request, Response, Router } from 'express';
 
-const router = express.Router();
+const router: Router = express.Router();
 
-// Crop recommendations route
-router.get('/crop-recommendations', (req, res) => {
-    const { weather, soilType } = req.query;
-    // Logic for crop recommendations based on weather and soil type
-    const recommendations = getCropRecommendations(weather, soilType);
-    res.json(recommendations);
+/**
+ * Health Check Endpoint
+ * GET /api/health
+ */
+router.get('/health', (req: Request, res: Response) => {
+    res.status(200).json({
+        status: 'operational',
+        timestamp: new Date().toISOString(),
+        service: 'KrishiAI Backend',
+        version: '1.0.0'
+    });
 });
 
-// Disease detection route
-router.post('/disease-detection', (req, res) => {
-    const { cropImage } = req.body;
-    // Logic for disease detection in crops using the provided image
-    const diseaseInfo = detectDisease(cropImage);
-    res.json(diseaseInfo);
+/**
+ * Crop Recommendations Endpoint
+ * POST /api/crops/recommend
+ */
+router.post('/crops/recommend', (req: Request, res: Response) => {
+    try {
+        const { temperature, rainfall, phLevel, moisture, nitrogen } = req.body;
+
+        // Validation
+        if (!temperature || !rainfall || !phLevel) {
+            return res.status(400).json({
+                error: 'Missing required fields',
+                required: ['temperature', 'rainfall', 'phLevel']
+            });
+        }
+
+        // Mock recommendation logic
+        const recommendations = {
+            crop1: { name: 'Rice', suitability: 92 },
+            crop2: { name: 'Wheat', suitability: 78 },
+            crop3: { name: 'Maize', suitability: 65 }
+        };
+
+        res.status(200).json({
+            success: true,
+            data: {
+                recommendations,
+                reason: `Based on temperature (${temperature}°C), rainfall (${rainfall}mm), and soil pH (${phLevel})`
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error processing crop recommendations',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
 });
 
-// Price predictions route
-router.get('/price-predictions', (req, res) => {
-    const { crop } = req.query;
-    // Logic for price predictions based on crop
-    const predictedPrices = getPricePredictions(crop);
-    res.json(predictedPrices);
+/**
+ * Disease Detection Endpoint
+ * POST /api/disease/detect
+ */
+router.post('/disease/detect', (req: Request, res: Response) => {
+    try {
+        const { symptoms, cropType } = req.body;
+
+        // Validation
+        if (!symptoms || !Array.isArray(symptoms) || symptoms.length === 0) {
+            return res.status(400).json({
+                error: 'Invalid symptoms',
+                message: 'Symptoms must be a non-empty array of strings'
+            });
+        }
+
+        if (!cropType || typeof cropType !== 'string') {
+            return res.status(400).json({
+                error: 'Invalid crop type',
+                message: 'Crop type must be a string'
+            });
+        }
+
+        // Mock disease detection
+        const detection = {
+            disease: 'Powdery Mildew',
+            confidence: 87,
+            severity: 'medium',
+            controlMethods: [
+                'Apply sulfur fungicide',
+                'Improve air circulation',
+                'Remove infected leaves'
+            ]
+        };
+
+        res.status(200).json({
+            success: true,
+            data: detection
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error detecting disease',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
 });
 
-// Fertilizer suggestions route
-router.get('/fertilizer-suggestions', (req, res) => {
-    const { cropType, soilNutrients } = req.query;
-    // Logic for fertilizer suggestions based on crop type and soil nutrients
-    const suggestions = getFertilizerSuggestions(cropType, soilNutrients);
-    res.json(suggestions);
+/**
+ * Price Prediction Endpoint
+ * GET /api/prices/predict?crop=wheat&days=7
+ */
+router.get('/prices/predict', (req: Request, res: Response) => {
+    try {
+        const { crop, days } = req.query;
+
+        // Validation
+        if (!crop || typeof crop !== 'string') {
+            return res.status(400).json({
+                error: 'Missing required parameter: crop'
+            });
+        }
+
+        const daysAhead = days ? parseInt(String(days)) : 1;
+
+        if (isNaN(daysAhead) || daysAhead < 1 || daysAhead > 30) {
+            return res.status(400).json({
+                error: 'Invalid days parameter',
+                message: 'Days must be between 1 and 30'
+            });
+        }
+
+        // Mock price prediction
+        const prediction = {
+            crop: crop,
+            predictedPrice: 2450,
+            currency: 'INR/quintal',
+            daysAhead: daysAhead,
+            trend: 'up',
+            confidence: 85
+        };
+
+        res.status(200).json({
+            success: true,
+            data: prediction
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error predicting price',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
 });
 
-// Helper functions (placeholders for actual implementations)
-function getCropRecommendations(weather, soilType) {
-    // Placeholder implementation
-    return { message: 'Recommended crops based on weather and soil type.' };
-}
+/**
+ * Fertilizer Recommendations Endpoint
+ * POST /api/fertilizer/recommend
+ */
+router.post('/fertilizer/recommend', (req: Request, res: Response) => {
+    try {
+        const { cropType, nitrogen, phosphorus, potassium, areaInAcres } = req.body;
 
-function detectDisease(cropImage) {
-    // Placeholder implementation
-    return { message: 'Disease detected: None' };
-}
+        // Validation
+        if (!cropType || nitrogen === undefined || phosphorus === undefined || potassium === undefined) {
+            return res.status(400).json({
+                error: 'Missing required fields',
+                required: ['cropType', 'nitrogen', 'phosphorus', 'potassium']
+            });
+        }
 
-function getPricePredictions(crop) {
-    // Placeholder implementation
-    return { message: 'Predicted prices for ' + crop };
-}
+        if (typeof nitrogen !== 'number' || typeof phosphorus !== 'number' || typeof potassium !== 'number') {
+            return res.status(400).json({
+                error: 'Nutrient levels must be numbers'
+            });
+        }
 
-function getFertilizerSuggestions(cropType, soilNutrients) {
-    // Placeholder implementation
-    return { message: 'Fertilizer suggestions based on crop type and soil nutrients.' };
-}
+        // Mock fertilizer recommendations
+        const recommendations = {
+            fertilizers: [
+                { name: 'Urea', quantity: 50, unit: 'kg/acre', cost: 1500 },
+                { name: 'Superphosphate', quantity: 40, unit: 'kg/acre', cost: 1200 }
+            ],
+            totalCost: 2700
+        };
+
+        res.status(200).json({
+            success: true,
+            data: recommendations
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error generating fertilizer recommendations',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+/**
+ * Weather Data Endpoint
+ * GET /api/weather?city=delhi
+ */
+router.get('/weather', (req: Request, res: Response) => {
+    try {
+        const { city } = req.query;
+
+        // Validation
+        if (!city || typeof city !== 'string') {
+            return res.status(400).json({
+                error: 'Missing required parameter: city'
+            });
+        }
+
+        // Mock weather data
+        const weatherData = {
+            location: city,
+            temperature: 28,
+            humidity: 65,
+            windSpeed: 12,
+            precipitation: 5,
+            description: 'Partly cloudy',
+            farmingSuitability: {
+                suitable: true,
+                reason: 'Weather conditions are favorable for farming'
+            }
+        };
+
+        res.status(200).json({
+            success: true,
+            data: weatherData
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error fetching weather data',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+/**
+ * NLP Query Endpoint
+ * POST /api/nlp/query
+ */
+router.post('/nlp/query', (req: Request, res: Response) => {
+    try {
+        const { query } = req.body;
+
+        // Validation
+        if (!query || typeof query !== 'string' || query.trim().length === 0) {
+            return res.status(400).json({
+                error: 'Invalid query',
+                message: 'Query must be a non-empty string'
+            });
+        }
+
+        // Mock NLP response
+        const nlpResponse = {
+            query: query,
+            intent: 'crop_recommendation',
+            entities: ['crop', 'weather'],
+            language: 'en',
+            response: 'Based on your query, I recommend growing rice and wheat.'
+        };
+
+        res.status(200).json({
+            success: true,
+            data: nlpResponse
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error processing query',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+/**
+ * Available Crops Endpoint
+ * GET /api/crops/list
+ */
+router.get('/crops/list', (req: Request, res: Response) => {
+    try {
+        const crops = ['Rice', 'Wheat', 'Maize', 'Cotton', 'Sugarcane'];
+
+        res.status(200).json({
+            success: true,
+            data: {
+                crops: crops,
+                count: crops.length
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error fetching crops list',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+/**
+ * Available Diseases Endpoint
+ * GET /api/disease/list
+ */
+router.get('/disease/list', (req: Request, res: Response) => {
+    try {
+        const diseases = [
+            'Powdery Mildew',
+            'Bacterial Blight',
+            'Rust Disease',
+            'Fusarium Wilt',
+            'Downy Mildew'
+        ];
+
+        res.status(200).json({
+            success: true,
+            data: {
+                diseases: diseases,
+                count: diseases.length
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error fetching diseases list',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+/**
+ * API Documentation Endpoint
+ * GET /api/docs
+ */
+router.get('/docs', (req: Request, res: Response) => {
+    const documentation = {
+        title: 'KrishiAI API Documentation',
+        version: '1.0.0',
+        baseUrl: 'http://localhost:5001/api',
+        endpoints: {
+            health: {
+                method: 'GET',
+                path: '/health',
+                description: 'Health check endpoint'
+            },
+            cropRecommendations: {
+                method: 'POST',
+                path: '/crops/recommend',
+                description: 'Get crop recommendations based on environmental factors',
+                body: {
+                    temperature: 'number (required)',
+                    rainfall: 'number (required)',
+                    phLevel: 'number (required)',
+                    moisture: 'number (optional)',
+                    nitrogen: 'number (optional)'
+                }
+            },
+            diseaseDetection: {
+                method: 'POST',
+                path: '/disease/detect',
+                description: 'Detect crop diseases based on symptoms',
+                body: {
+                    symptoms: 'string[] (required)',
+                    cropType: 'string (required)'
+                }
+            },
+            pricePrediction: {
+                method: 'GET',
+                path: '/prices/predict',
+                description: 'Predict market prices for crops',
+                query: {
+                    crop: 'string (required)',
+                    days: 'number (optional, default: 1)'
+                }
+            },
+            fertilizerRecommendations: {
+                method: 'POST',
+                path: '/fertilizer/recommend',
+                description: 'Get fertilizer recommendations',
+                body: {
+                    cropType: 'string (required)',
+                    nitrogen: 'number (required)',
+                    phosphorus: 'number (required)',
+                    potassium: 'number (required)',
+                    areaInAcres: 'number (optional)'
+                }
+            },
+            weather: {
+                method: 'GET',
+                path: '/weather',
+                description: 'Get weather data for a city',
+                query: {
+                    city: 'string (required)'
+                }
+            },
+            nlpQuery: {
+                method: 'POST',
+                path: '/nlp/query',
+                description: 'Process natural language farmer queries',
+                body: {
+                    query: 'string (required)'
+                }
+            }
+        }
+    };
+
+    res.status(200).json(documentation);
+});
+
+// 404 Handler for undefined routes
+router.use((req: Request, res: Response) => {
+    res.status(404).json({
+        error: 'Endpoint not found',
+        path: req.path,
+        method: req.method,
+        hint: 'Visit /api/docs for API documentation'
+    });
+});
 
 export default router;
