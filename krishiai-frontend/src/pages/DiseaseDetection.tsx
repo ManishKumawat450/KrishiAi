@@ -18,8 +18,16 @@ const CROPS = ['Rice', 'Wheat', 'Maize', 'Cotton', 'Sugarcane'];
 
 interface DiseaseResult {
   disease: string;
+  hindiName?: string;
   confidence: number;
+  severity?: string;
+  cause?: string;
+  description?: string;
   controlMethods?: string[];
+  preventiveMeasures?: string[];
+  organicTreatment?: string;
+  estimatedYieldLoss?: string;
+  matchedSymptoms?: string[];
 }
 
 export default function DiseaseDetection() {
@@ -166,19 +174,40 @@ export default function DiseaseDetection() {
             {!loading && !error && result && (
               <div className="space-y-4">
                 <article className="rounded-xl border border-rose-200 bg-rose-50 p-5">
-                  <h3 className="text-2xl font-black text-rose-700">{result.disease}</h3>
-                  <div className="mt-3 inline-flex items-center rounded-full border border-rose-300 bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700">
-                    {result.confidence}% confidence
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div>
+                      <h3 className="text-2xl font-black text-rose-700">{result.disease}</h3>
+                      {result.hindiName && <p className="mt-0.5 text-sm text-rose-500">{result.hindiName}</p>}
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="inline-flex items-center rounded-full border border-rose-300 bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700">
+                        {result.confidence}% confidence
+                      </span>
+                      {result.severity && (
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          result.severity === 'Critical' ? 'bg-red-100 text-red-800' :
+                          result.severity === 'High' ? 'bg-orange-100 text-orange-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          Severity: {result.severity}
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {result.cause && <p className="mt-2 text-xs text-rose-600">Cause: {result.cause}</p>}
+                  {result.description && <p className="mt-2 text-sm text-rose-700">{result.description}</p>}
+                  {result.estimatedYieldLoss && (
+                    <p className="mt-2 text-xs font-semibold text-rose-600">⚠️ Estimated yield loss: {result.estimatedYieldLoss}</p>
+                  )}
                 </article>
 
                 <article className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                  <h4 className="text-lg font-bold text-slate-900">Control Methods</h4>
+                  <h4 className="text-base font-bold text-slate-900">💊 Control Methods</h4>
                   {result.controlMethods && result.controlMethods.length > 0 ? (
                     <ul className="mt-3 space-y-2">
                       {result.controlMethods.map((method, idx) => (
                         <li key={idx} className="flex items-start gap-3">
-                          <span className="mt-0.5 text-emerald-600">✓</span>
+                          <span className="mt-0.5 text-emerald-600 font-bold">✓</span>
                           <span className="text-sm text-slate-700">{method}</span>
                         </li>
                       ))}
@@ -187,6 +216,27 @@ export default function DiseaseDetection() {
                     <p className="mt-3 text-sm text-slate-600">No control methods returned for this detection.</p>
                   )}
                 </article>
+
+                {result.preventiveMeasures && result.preventiveMeasures.length > 0 && (
+                  <article className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+                    <h4 className="text-base font-bold text-blue-900">🛡️ Prevention</h4>
+                    <ul className="mt-3 space-y-2">
+                      {result.preventiveMeasures.map((m, idx) => (
+                        <li key={idx} className="flex items-start gap-3">
+                          <span className="mt-0.5 text-blue-600">•</span>
+                          <span className="text-sm text-blue-800">{m}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                )}
+
+                {result.organicTreatment && (
+                  <article className="rounded-xl border border-green-200 bg-green-50 p-4">
+                    <h4 className="text-base font-bold text-green-900">🌿 Organic Treatment</h4>
+                    <p className="mt-2 text-sm text-green-800">{result.organicTreatment}</p>
+                  </article>
+                )}
               </div>
             )}
           </div>

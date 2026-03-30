@@ -1,1 +1,9 @@
-// diseaseAgent.ts\n\nimport * as tf from '@tensorflow/tfjs';\nimport { loadGraphModel } from '@tensorflow/tfjs-converter';\n\nclass DiseaseAgent {\n    constructor(modelUrl) {\n        this.modelUrl = modelUrl;\n        this.model = null;\n    }\n\n    async loadModel() {\n        this.model = await loadGraphModel(this.modelUrl);\n    }\n\n    async predict(image) {\n        const preprocessedImage = this.preprocessImage(image);\n        const prediction = await this.model.predict(preprocessedImage).data();\n        return prediction;\n    }\n\n    preprocessImage(image) {\n        // Logic to preprocess the image before feeding it to the model\n        return tf.browser.fromPixels(image)\n            .resizeBilinear([224, 224])\n            .expandDims(0)\n            .toFloat()\/255.0;\n    }\n}\n\n// Example usage\n(async () => {\n    const agent = new DiseaseAgent('path/to/your/model.json');\n    await agent.loadModel();\n    const image = document.getElementById('imageId'); // Replace with your image element\n    const prediction = await agent.predict(image);\n    console.log('Prediction:', prediction);\n});\n
+// diseaseAgent.ts — Disease detection agent (uses diseaseDetectionService for full implementation)
+
+import { detectDisease } from '../services/diseaseDetectionService';
+
+export function detectCropDisease(symptoms: string[], cropType: string) {
+    return detectDisease({ symptoms, cropType });
+}
+
+export default { detectCropDisease };

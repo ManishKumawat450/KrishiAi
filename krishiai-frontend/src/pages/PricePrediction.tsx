@@ -3,14 +3,27 @@ import axios from 'axios';
 
 const API_BASE = 'http://localhost:5001/api';
 
-const CROPS = ['Wheat', 'Rice', 'Cotton', 'Sugarcane', 'Maize'];
+const CROPS = ['Wheat', 'Rice', 'Cotton', 'Sugarcane', 'Maize', 'Soybean', 'Mustard', 'Chickpea', 'Groundnut', 'Tomato', 'Onion'];
+
+interface PriceHistoryItem {
+  day: string;
+  price: number;
+}
 
 interface PricePredictionResult {
   crop: string;
+  hindiName?: string;
   daysAhead: number;
+  currentPrice: number;
   predictedPrice: number;
-  trend: 'up' | 'down' | string;
+  trend: 'up' | 'down' | 'stable' | string;
+  trendPercent?: number;
   confidence: number;
+  msp?: number;
+  advice?: string;
+  priceHistory?: PriceHistoryItem[];
+  bestSellingMarkets?: string[];
+  unit?: string;
 }
 
 export default function PricePrediction() {
@@ -137,28 +150,87 @@ export default function PricePrediction() {
             {!loading && !error && result && (
               <div className="space-y-4">
                 <article className="rounded-xl border border-cyan-200 bg-cyan-50 p-5">
-                  <p className="text-sm text-slate-700">
-                    <strong>{result.crop}</strong> · {result.daysAhead} days ahead
-                  </p>
-                  <div className="mt-3 flex items-baseline gap-2">
-                    <span className="text-4xl font-black text-cyan-700 sm:text-5xl">₹{result.predictedPrice}</span>
-                    <span className="text-base text-slate-600">/quintal</span>
+                  <div className="flex items-start justify-between flex-wrap gap-2">
+                    <div>
+                      <p className="text-sm text-slate-700">
+                        <strong>{result.crop}</strong>{result.hindiName && ` (${result.hindiName})`} · {result.daysAhead} days ahead
+                      </p>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-4xl font-black text-cyan-700 sm:text-5xl">₹{result.predictedPrice}</span>
+                        <span className="text-base text-slate-600">/{result.unit?.replace('INR/', '') ?? 'quintal'}</span>
+                      </div>
+                    </div>
+                    <div className="text-right text-sm text-slate-600">
+                      <p>Current: <strong>₹{result.currentPrice}</strong></p>
+                      {result.msp && result.msp > 0 && <p>MSP: <strong>₹{result.msp}</strong></p>}
+                    </div>
                   </div>
+                  {result.advice && (
+                    <div className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-sm text-slate-700">{result.advice}</div>
+                  )}
                 </article>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-xs uppercase tracking-[0.1em] text-slate-500">Trend</p>
                     <p className="mt-2 text-lg font-bold text-slate-900">
-                      {result.trend === 'up' ? '📈 UP' : '📉 DOWN'}
+                      {result.trend === 'up' ? '📈 UP' : result.trend === 'down' ? '📉 DOWN' : '➡️ STABLE'}
                     </p>
+                    {result.trendPercent !== undefined && (
+                      <p className={`text-xs ${result.trend === 'up' ? 'text-emerald-600' : result.trend === 'down' ? 'text-rose-600' : 'text-slate-500'}`}>
+                        {result.trendPercent}%
+                      </p>
+                    )}
                   </article>
 
                   <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-xs uppercase tracking-[0.1em] text-slate-500">Confidence</p>
                     <p className="mt-2 text-lg font-bold text-emerald-700">{result.confidence}%</p>
                   </article>
+
+                  <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.1em] text-slate-500">Change</p>
+                    <p className={`mt-2 text-lg font-bold ${result.predictedPrice >= result.currentPrice ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {result.predictedPrice >= result.currentPrice ? '+' : ''}₹{result.predictedPrice - result.currentPrice}
+                    </p>
+                  </article>
                 </div>
+
+                {result.bestSellingMarkets && result.bestSellingMarkets.length > 0 && (
+                  <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Best Selling Markets</p>
+                    <div className="flex flex-wrap gap-2">
+                      {result.bestSellingMarkets.map((market, idx) => (
+                        <span key={idx} className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-medium text-cyan-800">📍 {market}</span>
+                      ))}
+                    </div>
+                  </article>
+                )}
+
+                {result.priceHistory && result.priceHistory.length > 0 && (
+                  <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">7-Day Price History</p>
+                    <div className="flex items-end gap-1 h-16">
+                      {result.priceHistory.map((item, idx) => {
+                        const prices = result.priceHistory!.map(h => h.price);
+                        const minP = Math.min(...prices);
+                        const maxP = Math.max(...prices);
+                        const range = maxP - minP || 1;
+                        const height = Math.round(((item.price - minP) / range) * 60) + 8;
+                        return (
+                          <div key={idx} className="flex flex-col items-center flex-1 gap-1">
+                            <div
+                              className="w-full rounded-t bg-cyan-400"
+                              style={{ height: `${height}px` }}
+                              title={`₹${item.price}`}
+                            />
+                            <span className="text-[9px] text-slate-500 truncate w-full text-center">{item.day}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </article>
+                )}
               </div>
             )}
           </div>

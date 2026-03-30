@@ -1,7 +1,6 @@
-// cropAgent.ts
+// cropAgent.ts — legacy agent (logic moved to cropRecommendationService)
 
-// Import necessary libraries
-import { WeatherData, SoilData } from './dataModels';
+import { WeatherData, SoilData } from '../types/dataModels';
 
 /**
  * Crop Recommendation AI Agent
@@ -21,13 +20,13 @@ class CropAgent {
     recommendCrops(): string[] {
         const recommendations: string[] = [];
 
-        if (this.weatherData.temperature > 20 && this.soilData.moisture > 15) {
+        if (this.weatherData.temperature > 20 && this.soilData.moistureContent > 15) {
             recommendations.push('Rice');
         }
-        if (this.weatherData.temperature < 20 && this.soilData.pH < 6.5) {
+        if (this.weatherData.temperature < 20 && this.soilData.phLevel < 6.5) {
             recommendations.push('Wheat');
         }
-        if (this.weatherData.sunlightHours > 5 && this.soilData.nitrogen > 0.5) {
+        if (this.soilData.nutrientLevels.nitrogen > 50) {
             recommendations.push('Corn');
         }
 
