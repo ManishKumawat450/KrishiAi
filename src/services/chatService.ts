@@ -67,7 +67,7 @@ Common signs of disease:
     },
     {
         intent: 'fertilizer_guidance',
-        keywords: ['fertilizer', 'manure', 'nutrient', 'urea', 'dap', 'nitrogen', 'phosphorus', 'potassium', 'npk', 'khad', 'urvarak', 'soil', 'mitti'],
+        keywords: ['fertilizer', 'manure', 'nutrient', 'urea', 'dap', 'nitrogen', 'phosphorus', 'potassium', 'npk', 'khad', 'urvarak', 'soil', 'mitti', 'khaad', 'sinchai', 'kheti', 'dal', 'daalen'],
         response: () => `🧪 **Fertilizer Guidance**
 
 **Key macronutrients**:
@@ -205,6 +205,33 @@ function detectLanguage(query: string): string {
 
 function findIntent(query: string): IntentPattern | null {
     const normalizedQuery = query.toLowerCase();
+
+    // Devanagari keyword hints (common Hindi farming terms)
+    const devanagariHints: Record<string, string> = {
+        'खाद': 'fertilizer_guidance',
+        'खाद डालें': 'fertilizer_guidance',
+        'उर्वरक': 'fertilizer_guidance',
+        'फसल': 'crop_recommendation',
+        'बीमारी': 'disease_detection',
+        'रोग': 'disease_detection',
+        'कीड़ा': 'disease_detection',
+        'मंडी': 'price_prediction',
+        'भाव': 'price_prediction',
+        'दाम': 'price_prediction',
+        'मौसम': 'weather_farming',
+        'बारिश': 'weather_farming',
+        'सरकार': 'government_schemes',
+        'योजना': 'government_schemes',
+        'जैविक': 'organic_farming',
+    };
+
+    // Check for Devanagari keyword hints first
+    for (const [hindiKw, intentName] of Object.entries(devanagariHints)) {
+        if (query.includes(hindiKw)) {
+            const matched = intents.find(i => i.intent === intentName);
+            if (matched) return matched;
+        }
+    }
     
     let bestMatch: { intent: IntentPattern; matchCount: number } | null = null;
     
