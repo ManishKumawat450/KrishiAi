@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const BASE_URL = 'http://api.openweathermap.org/data/2.5/weather';
+const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast';
 
 export interface WeatherResult {
     location: string;
