@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const BASE_URL = 'http://api.openweathermap.org/data/2.5/weather';
 const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast';
+const GEOCODING_URL = 'https://nominatim.openstreetmap.org/reverse';
 
 export interface WeatherResult {
     location: string;
@@ -130,4 +131,116 @@ export const fetchWeatherData = async (city: string): Promise<WeatherResult> => 
         cropAdvice: getCropAdvice(temp, humidity, precipitation),
         source: 'fallback',
     };
+};
+
+// WMO Weather Interpretation Code → description mapping (subset)
+function wmoDescription(code: number): string {
+    if (code === 0) return 'Clear sky';
+    if (code <= 3) return 'Partly cloudy';
+    if (code <= 9) return 'Foggy';
+    if (code <= 19) return 'Drizzle';
+    if (code <= 29) return 'Rain showers';
+    if (code <= 39) return 'Snow';
+    if (code <= 49) return 'Fog';
+    if (code <= 59) return 'Drizzle';
+    if (code <= 69) return 'Rain';
+    if (code <= 79) return 'Snow';
+    if (code <= 84) return 'Rain showers';
+    if (code <= 94) return 'Thunderstorm';
+    return 'Thunderstorm with hail';
+}
+
+/**
+ * Fetches current weather for a lat/lon coordinate using the free Open-Meteo API.
+ * No API key required.
+ */
+export const fetchWeatherByLatLon = async (lat: number, lon: number): Promise<WeatherResult> => {
+    try {
+        const [meteoResp, geoResp] = await Promise.allSettled([
+            axios.get(OPEN_METEO_BASE, {
+                params: {
+                    latitude: lat,
+                    longitude: lon,
+                    current_weather: true,
+                    hourly: 'relativehumidity_2m,precipitation,apparent_temperature,surface_pressure,visibility',
+                    forecast_days: 1,
+                    timezone: 'auto',
+                },
+                timeout: 8000,
+            }),
+            axios.get(GEOCODING_URL, {
+                params: { lat, lon, format: 'json' },
+                headers: { 'User-Agent': 'KrishiAI/2.0' },
+                timeout: 5000,
+            }),
+        ]);
+
+        if (meteoResp.status !== 'fulfilled') {
+            throw new Error('Open-Meteo request failed');
+        }
+
+        const m = meteoResp.value.data;
+        const cw = m.current_weather;
+        const temp: number = cw.temperature;
+        const windSpeed: number = Math.round(cw.windspeed);
+
+        // Use the first hourly value as a proxy for "current" conditions
+        const hourly = m.hourly ?? {};
+        const humidity: number = (hourly.relativehumidity_2m?.[0]) ?? 60;
+        const precipitation: number = (hourly.precipitation?.[0]) ?? 0;
+        const feelsLike: number = hourly.apparent_temperature?.[0] ?? (temp - 2);
+        const pressure: number = hourly.surface_pressure?.[0] ?? 1013;
+        const visibilityRaw: number = hourly.visibility?.[0] ?? 10000;
+
+        const description = wmoDescription(cw.weathercode ?? 0);
+        const suitability = getFarmingSuitability(temp, humidity, windSpeed);
+
+        let locationName = `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+        if (geoResp.status === 'fulfilled') {
+            const addr = geoResp.value.data?.address;
+            if (addr) {
+                const parts = [addr.village ?? addr.town ?? addr.city ?? addr.county, addr.state, addr.country]
+                    .filter(Boolean);
+                if (parts.length > 0) locationName = parts.join(', ');
+            }
+        }
+
+        return {
+            location: locationName,
+            temperature: Math.round(temp * 10) / 10,
+            feelsLike: Math.round(feelsLike * 10) / 10,
+            humidity,
+            windSpeed,
+            precipitation,
+            description,
+            icon: cw.is_day ? '01d' : '01n',
+            pressure,
+            visibility: Math.round(visibilityRaw / 1000),
+            farmingSuitability: suitability,
+            cropAdvice: getCropAdvice(temp, humidity, precipitation),
+            source: 'live',
+        };
+    } catch {
+        // Return a generic fallback when coordinates can't be resolved
+        const temp = 28;
+        const humidity = 62;
+        const windSpeed = 12;
+        const precipitation = 1;
+        const suitability = getFarmingSuitability(temp, humidity, windSpeed);
+        return {
+            location: `${lat.toFixed(2)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`,
+            temperature: temp,
+            feelsLike: temp - 2,
+            humidity,
+            windSpeed,
+            precipitation,
+            description: 'Partly cloudy',
+            icon: '02d',
+            pressure: 1013,
+            visibility: 10,
+            farmingSuitability: suitability,
+            cropAdvice: getCropAdvice(temp, humidity, precipitation),
+            source: 'fallback',
+        };
+    }
 };
