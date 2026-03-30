@@ -5,7 +5,11 @@ const API_BASE = 'http://localhost:5001/api';
 
 interface CropOption {
   name: string;
+  hindiName?: string;
   suitability: number;
+  season?: string;
+  reason?: string;
+  avgPrice?: number;
 }
 
 interface CropRecommendationData {
@@ -171,7 +175,12 @@ export default function CropRecommendation() {
                 {recommendations.map((crop, index) => (
                   <article key={`${crop.name}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="mb-3 flex items-center justify-between gap-2">
-                      <p className="text-base font-bold text-slate-900 sm:text-lg">{crop.name}</p>
+                      <div>
+                        <p className="text-base font-bold text-slate-900 sm:text-lg">{crop.name}</p>
+                        {crop.hindiName && (
+                          <p className="text-xs text-slate-500">{crop.hindiName}</p>
+                        )}
+                      </div>
                       <span className={`rounded-full border px-3 py-1 text-xs font-bold ${badgeStyles[index] || badgeStyles[2]}`}>
                         {crop.suitability}% match
                       </span>
@@ -187,6 +196,25 @@ export default function CropRecommendation() {
                         aria-label={`${crop.name} suitability`}
                       />
                     </div>
+                    {(crop.season || crop.reason || crop.avgPrice) && (
+                      <div className="mt-3 grid grid-cols-1 gap-1.5 text-xs text-slate-600 sm:grid-cols-3">
+                        {crop.season && (
+                          <div className="rounded-lg bg-white/80 px-2.5 py-1.5">
+                            <span className="font-semibold text-slate-700">📅 Season: </span>{crop.season}
+                          </div>
+                        )}
+                        {crop.avgPrice !== undefined && (
+                          <div className="rounded-lg bg-white/80 px-2.5 py-1.5">
+                            <span className="font-semibold text-slate-700">💰 Avg Price: </span>₹{crop.avgPrice}/q
+                          </div>
+                        )}
+                        {crop.reason && (
+                          <div className="rounded-lg bg-white/80 px-2.5 py-1.5 sm:col-span-3">
+                            <span className="font-semibold text-slate-700">ℹ️ Why: </span>{crop.reason}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </article>
                 ))}
               </div>

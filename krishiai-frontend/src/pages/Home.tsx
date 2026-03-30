@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const API_BASE = 'http://localhost:5001/api';
+const GEOLOCATION_TIMEOUT_MS = 10000;
 
 interface HomeProps {
   onNavigate: (page: string) => void;
@@ -100,6 +101,8 @@ export default function Home({ onNavigate }: HomeProps) {
   const [weatherInput, setWeatherInput] = useState('Delhi');
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState('');
 
   const fetchWeather = async (city: string) => {
     setWeatherLoading(true);
@@ -113,12 +116,45 @@ export default function Home({ onNavigate }: HomeProps) {
     }
   };
 
+  const fetchWeatherByLocation = () => {
+    if (!navigator.geolocation) {
+      setGeoError('Geolocation is not supported by your browser.');
+      return;
+    }
+    setGeoLoading(true);
+    setGeoError('');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const resp = await axios.get<{ success: boolean; data: WeatherData }>(
+            `${API_BASE}/weather/get-by-location?lat=${latitude}&lon=${longitude}`
+          );
+          setWeather(resp.data.data);
+          if (resp.data.data.location) {
+            setWeatherInput(resp.data.data.location.split(',')[0] ?? 'My Location');
+          }
+        } catch {
+          setGeoError('Could not fetch weather for your location.');
+        } finally {
+          setGeoLoading(false);
+        }
+      },
+      () => {
+        setGeoError('Location access denied.');
+        setGeoLoading(false);
+      },
+      { timeout: GEOLOCATION_TIMEOUT_MS }
+    );
+  };
+
   useEffect(() => {
     fetchWeather('Delhi');
   }, []);
 
   const handleWeatherSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setGeoError('');
     if (weatherInput.trim()) fetchWeather(weatherInput.trim());
   };
 
@@ -239,7 +275,19 @@ export default function Home({ onNavigate }: HomeProps) {
                 >
                   🌤️
                 </button>
+                <button
+                  type="button"
+                  onClick={fetchWeatherByLocation}
+                  disabled={geoLoading}
+                  title="Use my current location"
+                  className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {geoLoading ? '⏳' : '📍'}
+                </button>
               </form>
+              {geoError && (
+                <p className="mb-2 text-xs text-rose-600">{geoError}</p>
+              )}
               {weatherLoading && <div className="h-16 animate-pulse rounded-lg bg-sky-200" />}
               {!weatherLoading && weather && (
                 <div>

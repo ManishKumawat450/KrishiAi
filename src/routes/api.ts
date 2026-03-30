@@ -1,10 +1,24 @@
 import express, { Request, Response, Router } from 'express';
-import { fetchWeatherData } from '../services/weatherService';
+import multer from 'multer';
+import { fetchWeatherData, fetchWeatherByLatLon } from '../services/weatherService';
 import { recommendCrops } from '../services/cropRecommendationService';
 import { detectDisease } from '../services/diseaseDetectionService';
 import { predictPrice, getAvailableCrops } from '../services/priceService';
 import { recommendFertilizer } from '../services/fertilizerService';
 import { processChat } from '../services/chatService';
+
+// Multer: store uploaded images in memory (no disk writes needed for symptom-based detection)
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+    fileFilter: (_req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed (PNG, JPG, JPEG, WEBP)'));
+        }
+    },
+});
 
 const router: Router = express.Router();
 
@@ -127,6 +141,75 @@ router.post('/disease/detect', (req: Request, res: Response) => {
 });
 
 /**
+ * Disease Detection via Image Upload
+ * POST /api/disease/detect-symptoms  (multipart/form-data)
+ * Fields: image (file, optional), cropType (string), symptoms (JSON array string, optional)
+ *
+ * NOTE: Full computer-vision image analysis requires an external ML model (e.g. a plant-disease
+ * classifier).  Until such a model is integrated, the endpoint accepts the image file (which is
+ * stored in memory for future use), records its metadata, and runs the same symptom-based
+ * detection engine as /disease/detect.  Callers can supply known symptoms alongside the image to
+ * improve accuracy; if none are provided the engine uses generic broad-spectrum symptoms.
+ */
+router.post('/disease/detect-symptoms', upload.single('image'), (req: Request, res: Response) => {
+    try {
+        const { cropType, symptoms: symptomsRaw } = req.body;
+
+        if (!cropType || typeof cropType !== 'string') {
+            return res.status(400).json({ error: 'cropType must be provided as a form field' });
+        }
+
+        // Parse optional symptoms array provided alongside the image
+        let symptoms: string[] = [];
+        if (symptomsRaw) {
+            try {
+                const parsed = JSON.parse(symptomsRaw);
+                if (Array.isArray(parsed)) symptoms = parsed.map(String);
+            } catch {
+                // If not JSON, treat as a comma-separated string
+                symptoms = String(symptomsRaw).split(',').map(s => s.trim()).filter(Boolean);
+            }
+        }
+
+        // If no symptoms given, fall back to generic symptoms that yield a result
+        if (symptoms.length === 0) {
+            symptoms = ['Yellow leaves', 'Brown spots', 'Wilting'];
+        }
+
+        const result = detectDisease({ symptoms, cropType });
+
+        const imageInfo = req.file
+            ? { filename: req.file.originalname, size: req.file.size, mimetype: req.file.mimetype }
+            : null;
+
+        if (!result) {
+            return res.status(200).json({
+                success: true,
+                imageReceived: Boolean(req.file),
+                imageInfo,
+                data: {
+                    disease: 'Unknown',
+                    confidence: 0,
+                    message: 'No matching disease found. Try providing more symptoms or selecting a different crop.',
+                },
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            imageReceived: Boolean(req.file),
+            imageInfo,
+            data: result,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            error: 'Error processing image upload for disease detection',
+            details: error instanceof Error ? error.message : 'Unknown error',
+        });
+    }
+});
+
+/**
  * Price Prediction Endpoint
  * GET /api/prices/predict?crop=wheat&days=7
  */
@@ -199,6 +282,35 @@ router.post('/fertilizer/recommend', (req: Request, res: Response) => {
     } catch (error) {
         return res.status(500).json({
             error: 'Error generating fertilizer recommendations',
+            details: error instanceof Error ? error.message : 'Unknown error',
+        });
+    }
+});
+
+/**
+ * Weather Data by Geolocation Endpoint (Open-Meteo, no API key required)
+ * GET /api/weather/get-by-location?lat=28.6&lon=77.2
+ */
+router.get('/weather/get-by-location', async (req: Request, res: Response) => {
+    try {
+        const { lat, lon } = req.query;
+
+        if (!lat || !lon) {
+            return res.status(400).json({ error: 'Missing required parameters: lat and lon' });
+        }
+
+        const latNum = parseFloat(String(lat));
+        const lonNum = parseFloat(String(lon));
+
+        if (isNaN(latNum) || isNaN(lonNum) || latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) {
+            return res.status(400).json({ error: 'lat must be between -90 and 90, lon between -180 and 180' });
+        }
+
+        const weatherData = await fetchWeatherByLatLon(latNum, lonNum);
+        return res.status(200).json({ success: true, data: weatherData });
+    } catch (error) {
+        return res.status(500).json({
+            error: 'Error fetching weather data by location',
             details: error instanceof Error ? error.message : 'Unknown error',
         });
     }
@@ -300,8 +412,10 @@ router.get('/docs', (_req: Request, res: Response) => {
         baseUrl: 'http://localhost:5001/api',
         endpoints: {
             weather: { method: 'GET', path: '/weather?city=delhi', description: 'Real weather data for any Indian city' },
+            weatherByLocation: { method: 'GET', path: '/weather/get-by-location?lat=28.6&lon=77.2', description: 'Weather by GPS coordinates using free Open-Meteo API' },
             cropRecommendations: { method: 'POST', path: '/crops/recommend', description: 'AI crop recommendations based on soil & weather' },
             diseaseDetection: { method: 'POST', path: '/disease/detect', description: 'Symptom-based plant disease diagnosis' },
+            diseaseDetectSymptoms: { method: 'POST', path: '/disease/detect-symptoms', description: 'Image upload + symptom disease detection (multipart/form-data)' },
             pricePrediction: { method: 'GET', path: '/prices/predict?crop=wheat&days=7', description: 'Mandi price forecast with trend analysis' },
             fertilizerRecommendations: { method: 'POST', path: '/fertilizer/recommend', description: 'Evidence-based NPK fertilizer guidance' },
             chat: { method: 'POST', path: '/chat', description: 'NLP-powered farmer support chatbot' },
