@@ -6,6 +6,8 @@ import { detectDisease } from '../services/diseaseDetectionService';
 import { predictPrice, getAvailableCrops } from '../services/priceService';
 import { recommendFertilizer } from '../services/fertilizerService';
 import { processChat } from '../services/chatService';
+import { MLModelService } from '../services/mlModelService';
+import { NlpService } from '../services/nlpService';
 
 // Multer: store uploaded images in memory (no disk writes needed for symptom-based detection)
 const upload = multer({
@@ -21,6 +23,10 @@ const upload = multer({
 });
 
 const router: Router = express.Router();
+
+// Shared service instances (module-level singletons)
+const mlModelService = new MLModelService();
+const nlpService = new NlpService();
 
 /**
  * Health Check Endpoint
@@ -210,6 +216,40 @@ router.post('/disease/detect-symptoms', upload.single('image'), (req: Request, r
 });
 
 /**
+ * CNN Image-Based Disease Detection Endpoint
+ * POST /api/disease/detect-image  (multipart/form-data)
+ * Fields:
+ *   - image (required): leaf/crop image file (JPEG, PNG, WEBP)
+ *   - cropType (optional): hint for the heuristic fallback
+ */
+router.post('/disease/detect-image', upload.single('image'), async (req: Request, res: Response) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided. Upload a leaf/crop image as form field "image".' });
+        }
+
+        const { cropType } = req.body;
+        const result = await mlModelService.predictDisease(req.file.buffer, cropType ?? undefined);
+
+        return res.status(200).json({
+            success: true,
+            imageReceived: true,
+            imageInfo: {
+                filename: req.file.originalname,
+                size: req.file.size,
+                mimetype: req.file.mimetype,
+            },
+            data: result,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            error: 'Error running disease detection on uploaded image',
+            details: error instanceof Error ? error.message : 'Unknown error',
+        });
+    }
+});
+
+/**
  * Price Prediction Endpoint
  * GET /api/prices/predict?crop=wheat&days=7
  */
@@ -341,6 +381,7 @@ router.get('/weather', async (req: Request, res: Response) => {
 /**
  * Chat / NLP Query Endpoint
  * POST /api/chat
+ * Now enriched with real NLP: intent classification, entity extraction, language detection.
  */
 router.post('/chat', (req: Request, res: Response) => {
     try {
@@ -350,8 +391,28 @@ router.post('/chat', (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Query must be a non-empty string' });
         }
 
-        const result = processChat({ query: query.trim(), language });
-        return res.status(200).json({ success: true, data: result });
+        const trimmedQuery = query.trim();
+
+        // Run real NLP analysis on the query
+        const nlpResult = nlpService.analyse(trimmedQuery, language);
+
+        // Pass through to the chat service (which provides formatted responses)
+        const chatResult = processChat({ query: trimmedQuery, language: nlpResult.language });
+
+        // Augment the response with NLP metadata
+        return res.status(200).json({
+            success: true,
+            data: {
+                ...chatResult,
+                nlp: {
+                    intent: nlpResult.intent,
+                    confidence: nlpResult.confidence,
+                    entities: nlpResult.entities,
+                    language: nlpResult.language,
+                    tokens: nlpResult.tokens.slice(0, 20), // Limit for response size
+                },
+            },
+        });
     } catch (error) {
         return res.status(500).json({
             error: 'Error processing chat query',
@@ -416,6 +477,7 @@ router.get('/docs', (_req: Request, res: Response) => {
             cropRecommendations: { method: 'POST', path: '/crops/recommend', description: 'AI crop recommendations based on soil & weather' },
             diseaseDetection: { method: 'POST', path: '/disease/detect', description: 'Symptom-based plant disease diagnosis' },
             diseaseDetectSymptoms: { method: 'POST', path: '/disease/detect-symptoms', description: 'Image upload + symptom disease detection (multipart/form-data)' },
+            diseaseDetectImage: { method: 'POST', path: '/disease/detect-image', description: 'CNN + heuristic AI image-based disease detection (multipart/form-data, field: image)' },
             pricePrediction: { method: 'GET', path: '/prices/predict?crop=wheat&days=7', description: 'Mandi price forecast with trend analysis' },
             fertilizerRecommendations: { method: 'POST', path: '/fertilizer/recommend', description: 'Evidence-based NPK fertilizer guidance' },
             chat: { method: 'POST', path: '/chat', description: 'NLP-powered farmer support chatbot' },

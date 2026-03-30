@@ -136,85 +136,149 @@ export interface CropRecommendationResult {
     avgPrice: number;
     durationDays: number;
     waterRequirement: string;
+    knnDistance?: number;    // Euclidean distance in feature space (lower = closer match)
+    seasonalScore?: number;  // Seasonal fit bonus (0–1)
 }
 
+// ── Feature normalisation helpers ─────────────────────────────────────────────
+
+/** Normalise a value to [0, 1] given the observed global range across all crops. */
+const FEATURE_RANGES = {
+    temperature: { min: 10, max: 37 },
+    rainfall:    { min: 300, max: 2000 },
+    phLevel:     { min: 5.5, max: 8.0 },
+    humidity:    { min: 30, max: 90 },
+};
+
+function normalise(value: number, key: keyof typeof FEATURE_RANGES): number {
+    const { min, max } = FEATURE_RANGES[key];
+    return (value - min) / (max - min);
+}
+
+/**
+ * Fuzzy distance between a point and a [min, max] range.
+ * Returns 0 when inside the range, increasing as the point moves outside.
+ */
+function fuzzyRangeDistance(value: number, min: number, max: number, scale: number): number {
+    if (value >= min && value <= max) return 0;
+    const dist = Math.min(Math.abs(value - min), Math.abs(value - max));
+    return dist / scale;
+}
+
+// ── Seasonal adjustment ────────────────────────────────────────────────────────
+/** Return a seasonal bonus in [0, 1] for a crop given the current month (0-indexed). */
+function seasonalScore(crop: CropProfile): number {
+    const month = new Date().getMonth(); // 0=Jan, …, 11=Dec
+    const kharifMonths  = new Set([5, 6, 7, 8, 9]);          // Jun–Oct
+    const rabiMonths    = new Set([9, 10, 11, 0, 1, 2]);      // Oct–Mar
+    const summerMonths  = new Set([2, 3, 4, 5]);              // Mar–Jun
+    const yearRoundStr  = 'year-round';
+
+    const s = crop.season.toLowerCase();
+    if (s.includes(yearRoundStr)) return 0.9;
+    if (s.includes('kharif') && kharifMonths.has(month)) return 1.0;
+    if (s.includes('rabi')   && rabiMonths.has(month))   return 1.0;
+    if (s.includes('summer') && summerMonths.has(month)) return 1.0;
+    if (s.includes('kharif') && !kharifMonths.has(month)) return 0.4;
+    if (s.includes('rabi')   && !rabiMonths.has(month))   return 0.4;
+    return 0.7;
+}
+
+// ── KNN recommendation ────────────────────────────────────────────────────────
 export function recommendCrops(input: CropRecommendationInput): CropRecommendationResult[] {
-    const results: CropRecommendationResult[] = [];
+    const results: Array<CropRecommendationResult & { _rawScore: number }> = [];
+
+    // Normalise input features once
+    const normTemp     = normalise(input.temperature, 'temperature');
+    const normRain     = normalise(input.rainfall,    'rainfall');
+    const normPH       = normalise(input.phLevel,     'phLevel');
+    const normHumidity = input.humidity !== undefined ? normalise(input.humidity, 'humidity') : null;
 
     for (const crop of cropProfiles) {
-        let score = 0;
         const reasons: string[] = [];
 
-        // Temperature scoring (35 pts)
+        // ── KNN: weighted Euclidean distance in normalised feature space ──────
         const [tMin, tMax] = crop.temperatureRange;
-        const tMid = (tMin + tMax) / 2;
-        if (input.temperature >= tMin && input.temperature <= tMax) {
-            const closeness = 1 - Math.abs(input.temperature - tMid) / ((tMax - tMin) / 2);
-            score += 35 * (0.6 + 0.4 * closeness);
-            reasons.push(`Temperature ${input.temperature}°C is within optimal range`);
-        } else {
-            const dist = Math.min(Math.abs(input.temperature - tMin), Math.abs(input.temperature - tMax));
-            if (dist <= 5) { score += 15; reasons.push(`Temperature slightly outside optimal range`); }
-        }
-
-        // Rainfall scoring (30 pts)
         const [rMin, rMax] = crop.rainfallRange;
-        if (input.rainfall >= rMin && input.rainfall <= rMax) {
-            const rMid = (rMin + rMax) / 2;
-            const closeness = 1 - Math.abs(input.rainfall - rMid) / ((rMax - rMin) / 2);
-            score += 30 * (0.6 + 0.4 * closeness);
-            reasons.push(`Rainfall ${input.rainfall}mm matches crop needs`);
-        } else {
-            const dist = Math.min(Math.abs(input.rainfall - rMin), Math.abs(input.rainfall - rMax));
-            if (dist <= 100) { score += 10; reasons.push(`Rainfall slightly outside optimal range`); }
-        }
-
-        // pH scoring (20 pts)
         const [pMin, pMax] = crop.pHRange;
-        if (input.phLevel >= pMin && input.phLevel <= pMax) {
-            score += 20;
-            reasons.push(`Soil pH ${input.phLevel} is suitable`);
-        } else {
-            const dist = Math.min(Math.abs(input.phLevel - pMin), Math.abs(input.phLevel - pMax));
-            if (dist <= 0.5) { score += 8; reasons.push(`Soil pH borderline`); }
+        const [hMin, hMax] = crop.humidityRange;
+
+        // Crop midpoints (normalised)
+        const cropNormTemp = normalise((tMin + tMax) / 2, 'temperature');
+        const cropNormRain = normalise((rMin + rMax) / 2, 'rainfall');
+        const cropNormPH   = normalise((pMin + pMax) / 2, 'phLevel');
+        const cropNormHum  = normalise((hMin + hMax) / 2, 'humidity');
+
+        // Feature weights: temperature and rainfall dominate
+        const W_TEMP = 0.35, W_RAIN = 0.30, W_PH = 0.20, W_HUM = 0.15;
+
+        const dTemp = fuzzyRangeDistance(input.temperature, tMin, tMax, FEATURE_RANGES.temperature.max - FEATURE_RANGES.temperature.min);
+        const dRain = fuzzyRangeDistance(input.rainfall,    rMin, rMax, FEATURE_RANGES.rainfall.max    - FEATURE_RANGES.rainfall.min);
+        const dPH   = fuzzyRangeDistance(input.phLevel,     pMin, pMax, FEATURE_RANGES.phLevel.max     - FEATURE_RANGES.phLevel.min);
+        const dHum  = normHumidity !== null
+            ? fuzzyRangeDistance(input.humidity!, hMin, hMax, FEATURE_RANGES.humidity.max - FEATURE_RANGES.humidity.min)
+            : Math.abs(normHumidity !== null ? normHumidity - cropNormHum : 0);
+
+        // Also factor point-to-midpoint distance (adds smoothness)
+        const midDistTemp = Math.abs(normTemp - cropNormTemp);
+        const midDistRain = Math.abs(normRain - cropNormRain);
+        const midDistPH   = Math.abs(normPH   - cropNormPH);
+        const midDistHum  = normHumidity !== null ? Math.abs(normHumidity - cropNormHum) : 0;
+
+        const knnDist = Math.sqrt(
+            W_TEMP * Math.pow((dTemp + midDistTemp) / 2, 2) +
+            W_RAIN * Math.pow((dRain + midDistRain) / 2, 2) +
+            W_PH   * Math.pow((dPH   + midDistPH)   / 2, 2) +
+            W_HUM  * Math.pow((dHum  + midDistHum)   / 2, 2)
+        );
+
+        // ── Reason strings ────────────────────────────────────────────────────
+        if (dTemp === 0) reasons.push(`Temperature ${input.temperature}°C is within optimal range`);
+        else reasons.push(`Temperature slightly outside optimal range`);
+        if (dRain === 0) reasons.push(`Rainfall ${input.rainfall}mm matches crop needs`);
+        if (dPH   === 0) reasons.push(`Soil pH ${input.phLevel} is suitable`);
+        if (normHumidity !== null && dHum === 0) reasons.push(`Humidity ${input.humidity}% is favorable`);
+
+        // ── Soil type bonus ───────────────────────────────────────────────────
+        let soilBonus = 0;
+        if (input.soilType) {
+            const matchesSoil = crop.soilTypes.some(
+                s => s.toLowerCase().includes(input.soilType!.toLowerCase()) ||
+                     input.soilType!.toLowerCase().includes(s.toLowerCase())
+            );
+            if (matchesSoil) { soilBonus = 0.05; reasons.push(`Soil type matches`); }
         }
 
-        // Humidity scoring (15 pts, if provided)
-        if (input.humidity !== undefined) {
-            const [hMin, hMax] = crop.humidityRange;
-            if (input.humidity >= hMin && input.humidity <= hMax) {
-                score += 15;
-                reasons.push(`Humidity ${input.humidity}% is favorable`);
-            } else {
-                const dist = Math.min(Math.abs(input.humidity - hMin), Math.abs(input.humidity - hMax));
-                if (dist <= 10) { score += 5; }
-            }
-        } else {
-            score += 8; // neutral when not provided
-        }
+        // ── Seasonal fit ──────────────────────────────────────────────────────
+        const seasonal = seasonalScore(crop);
 
-        // Normalize to 0–100
-        const maxPossible = 100;
-        const normalizedScore = Math.min(100, Math.round((score / maxPossible) * 100));
+        // ── Convert KNN distance to a 0–100 suitability score ─────────────────
+        // Distance 0 → 100, distance 0.5 → ~50, distance ≥ 1 → ~0
+        const baseScore = Math.max(0, 100 * (1 - knnDist * 1.8));
+        const adjustedScore = Math.round(Math.min(100, baseScore * seasonal + soilBonus * 100));
 
-        if (normalizedScore >= 30) {
+        if (adjustedScore >= 25) {
             results.push({
                 name: crop.name,
                 hindiName: crop.hindiName,
-                suitability: normalizedScore,
+                suitability: adjustedScore,
                 season: crop.season,
-                reason: reasons.slice(0, 2).join('. ') || 'Partially suitable for given conditions',
+                reason: reasons.slice(0, 3).join('. ') || 'Partially suitable for given conditions',
                 avgPrice: crop.avgPricePerQuintal,
                 durationDays: crop.durationDays,
                 waterRequirement: crop.waterRequirement,
+                knnDistance: Math.round(knnDist * 1000) / 1000,
+                seasonalScore: Math.round(seasonal * 100) / 100,
+                _rawScore: adjustedScore,
             });
         }
     }
 
     // Sort by suitability descending and return top 5
     return results
-        .sort((a, b) => b.suitability - a.suitability)
-        .slice(0, 5);
+        .sort((a, b) => b._rawScore - a._rawScore)
+        .slice(0, 5)
+        .map(({ _rawScore: _r, ...rest }) => rest);
 }
 
 export default recommendCrops;

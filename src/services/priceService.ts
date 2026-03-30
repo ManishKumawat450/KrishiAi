@@ -106,21 +106,56 @@ export interface PricePredictionResult {
     trend: 'up' | 'down' | 'stable';
     trendPercent: number;
     confidence: number;
+    confidenceInterval: { lower: number; upper: number };
     msp: number;
     advice: string;
     priceHistory: { day: string; price: number }[];
     bestSellingMarkets: string[];
+    forecastMethod: string;
 }
 
-function computeTrend(history: number[]): { slope: number; avgChange: number } {
-    if (history.length < 2) return { slope: 0, avgChange: 0 };
-    let totalChange = 0;
-    for (let i = 1; i < history.length; i++) {
-        totalChange += history[i] - history[i - 1];
+// ── Exponential Smoothing (Holt's linear / double exponential) ─────────────────
+// alpha: smoothing factor for level (0 < alpha < 1)
+// beta:  smoothing factor for trend (0 < beta < 1)
+function holtExponentialSmoothing(
+    series: number[],
+    alpha: number,
+    beta: number
+): { level: number; trend: number; smoothed: number[] } {
+    if (series.length < 2) return { level: series[0] ?? 0, trend: 0, smoothed: series.slice() };
+
+    let level = series[0];
+    let trend = series[1] - series[0];
+    const smoothed: number[] = [level];
+
+    for (let i = 1; i < series.length; i++) {
+        const prevLevel = level;
+        level = alpha * series[i] + (1 - alpha) * (prevLevel + trend);
+        trend = beta  * (level - prevLevel) + (1 - beta) * trend;
+        smoothed.push(level);
     }
-    const avgChange = totalChange / (history.length - 1);
-    const slope = avgChange / history[0];
-    return { slope, avgChange };
+    return { level, trend, smoothed };
+}
+
+// ── Seasonal decomposition (additive) ─────────────────────────────────────────
+function seasonalAdjustment(basePrice: number, key: string, daysAhead: number): number {
+    const factors = seasonalFactors[key] ?? new Array(12).fill(1.0);
+    const today = new Date();
+    const futureDate = new Date(today.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+    const futureMonth = futureDate.getMonth();
+    const currentMonth = today.getMonth();
+    const currentFactor = factors[currentMonth];
+    const futureFactor  = factors[futureMonth];
+    // Additive seasonal component
+    return basePrice * (futureFactor - currentFactor);
+}
+
+// ── Volatility-aware confidence ────────────────────────────────────────────────
+function computeVolatility(series: number[]): number {
+    if (series.length < 2) return 0;
+    const mean = series.reduce((a, b) => a + b, 0) / series.length;
+    const variance = series.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / series.length;
+    return Math.sqrt(variance) / mean; // coefficient of variation
 }
 
 export function predictPrice(cropName: string, daysAhead: number): PricePredictionResult | null {
@@ -128,38 +163,51 @@ export function predictPrice(cropName: string, daysAhead: number): PricePredicti
     const data = mandiPrices[key];
     if (!data) return null;
 
-    const { avgChange } = computeTrend(data.sevenDayHistory);
+    // ── Holt's exponential smoothing on 7-day history ─────────────────────────
+    const alpha = 0.4; // level smoothing
+    const beta  = 0.3; // trend smoothing
+    const { level, trend: holtsSlope, smoothed } = holtExponentialSmoothing(
+        data.sevenDayHistory, alpha, beta
+    );
 
-    const month = new Date().getMonth(); // 0-indexed
-    const seasonalFactor = (seasonalFactors[key] ?? new Array(12).fill(1.0))[month];
+    // ── Seasonal adjustment ────────────────────────────────────────────────────
+    const seasonal = seasonalAdjustment(data.basePrice, key, daysAhead);
 
-    // Predict price: current + trend * days * seasonal adjustment
-    const baseChange = avgChange * daysAhead;
-    const seasonalAdjustment = (seasonalFactor - 1) * data.basePrice * (daysAhead / 30);
-    const noise = (Math.random() - 0.5) * data.basePrice * 0.005; // ±0.5% noise
-    const predictedPrice = Math.round(data.basePrice + baseChange + seasonalAdjustment + noise);
+    // ── h-step ahead forecast: level + h * trend + seasonal ───────────────────
+    const rawForecast = level + holtsSlope * daysAhead + seasonal;
+    const predictedPrice = Math.max(0, Math.round(rawForecast));
+
+    // ── Confidence interval (proportional to volatility and horizon) ──────────
+    const volatility = computeVolatility(data.sevenDayHistory);
+    const horizonFactor = Math.sqrt(daysAhead);         // uncertainty grows with sqrt(h)
+    const intervalWidth = Math.round(predictedPrice * volatility * horizonFactor * 1.96);
+    const confidenceInterval = {
+        lower: Math.max(0, predictedPrice - intervalWidth),
+        upper: predictedPrice + intervalWidth,
+    };
 
     const trendPercent = Math.round(((predictedPrice - data.basePrice) / data.basePrice) * 1000) / 10;
     const trend: 'up' | 'down' | 'stable' =
         Math.abs(trendPercent) < 0.5 ? 'stable' : trendPercent > 0 ? 'up' : 'down';
 
-    // Confidence decreases with prediction horizon
-    const confidence = Math.max(55, Math.round(90 - daysAhead * 1.5));
+    // Confidence: higher alpha/beta means better fit; penalise long horizons
+    const baseConfidence = 88 - volatility * 100;
+    const confidence = Math.max(50, Math.round(baseConfidence - daysAhead * 1.2));
 
-    // Build recent history labels
+    // Build recent history labels (use smoothed series for display)
     const today = new Date();
-    const priceHistory = data.sevenDayHistory.map((price, i) => {
+    const priceHistory = smoothed.map((price, i) => {
         const d = new Date(today);
-        d.setDate(d.getDate() - (data.sevenDayHistory.length - 1 - i));
-        return { day: d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }), price };
+        d.setDate(d.getDate() - (smoothed.length - 1 - i));
+        return { day: d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }), price: Math.round(price) };
     });
 
     // Advice
     let advice = '';
     if (trend === 'up' && trendPercent > 1) {
-        advice = `📈 Prices rising. Consider holding stock for ${Math.min(daysAhead, 7)} more days for better returns.`;
+        advice = `📈 Prices rising (${trendPercent > 0 ? '+' : ''}${trendPercent}% in ${daysAhead} days). Consider holding stock for better returns.`;
     } else if (trend === 'down' && trendPercent < -1) {
-        advice = `📉 Prices may fall. Sell now or early to maximize returns.`;
+        advice = `📉 Prices may fall by ${Math.abs(trendPercent)}%. Sell now or early to maximise returns.`;
     } else if (data.msp > 0 && data.basePrice < data.msp) {
         advice = `⚠️ Current price (₹${data.basePrice}) is below MSP (₹${data.msp}). Sell to government procurement agencies.`;
     } else {
@@ -176,10 +224,12 @@ export function predictPrice(cropName: string, daysAhead: number): PricePredicti
         trend,
         trendPercent: Math.abs(trendPercent),
         confidence,
+        confidenceInterval,
         msp: data.msp,
         advice,
         priceHistory,
         bestSellingMarkets: data.markets.slice(0, 3),
+        forecastMethod: "Holt's Exponential Smoothing with Seasonal Decomposition",
     };
 }
 
