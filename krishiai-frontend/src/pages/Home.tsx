@@ -1,7 +1,22 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const API_BASE = 'http://localhost:5001/api';
 
 interface HomeProps {
   onNavigate: (page: string) => void;
+}
+
+interface WeatherData {
+  location: string;
+  temperature: number;
+  humidity: number;
+  windSpeed: number;
+  precipitation: number;
+  description: string;
+  farmingSuitability: { suitable: boolean; reason: string; score: number };
+  cropAdvice: string;
+  source: 'live' | 'fallback';
 }
 
 const featureCards = [
@@ -41,6 +56,15 @@ const featureCards = [
     theme: 'from-amber-300/20 to-amber-600/10 border-amber-300/30',
     cta: 'Optimize fertilizer',
   },
+  {
+    title: 'AI Chat Assistant',
+    description:
+      'Ask farming questions in Hindi, Punjabi, or English and get instant expert guidance.',
+    icon: '💬',
+    page: 'chat',
+    theme: 'from-violet-400/20 to-violet-600/10 border-violet-300/30',
+    cta: 'Start chatting',
+  },
 ];
 
 const howItWorks = [
@@ -73,6 +97,31 @@ const insightItems = [
 ];
 
 export default function Home({ onNavigate }: HomeProps) {
+  const [weatherInput, setWeatherInput] = useState('Delhi');
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+
+  const fetchWeather = async (city: string) => {
+    setWeatherLoading(true);
+    try {
+      const resp = await axios.get<{ success: boolean; data: WeatherData }>(`${API_BASE}/weather?city=${encodeURIComponent(city)}`);
+      setWeather(resp.data.data);
+    } catch {
+      // silent fail
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWeather('Delhi');
+  }, []);
+
+  const handleWeatherSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (weatherInput.trim()) fetchWeather(weatherInput.trim());
+  };
+
   const renderInsightState = () => {
     if (insightState === 'loading') {
       return (
@@ -165,13 +214,64 @@ export default function Home({ onNavigate }: HomeProps) {
                 <p className="mt-1 text-xs text-slate-600">Farmers reached</p>
               </div>
               <div className="rounded-xl border border-cyan-100 bg-cyan-50 p-4 text-center">
-                <p className="text-2xl font-black text-cyan-700">10+</p>
-                <p className="mt-1 text-xs text-slate-600">AI endpoints</p>
+                <p className="text-2xl font-black text-cyan-700">12+</p>
+                <p className="mt-1 text-xs text-slate-600">AI crops tracked</p>
               </div>
               <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-center">
                 <p className="text-2xl font-black text-amber-700">24/7</p>
                 <p className="mt-1 text-xs text-slate-600">Decision support</p>
               </div>
+            </div>
+
+            {/* Live Weather Widget */}
+            <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50 p-4">
+              <form onSubmit={handleWeatherSubmit} className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={weatherInput}
+                  onChange={(e) => setWeatherInput(e.target.value)}
+                  placeholder="Enter city..."
+                  className="flex-1 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-sky-400"
+                />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-600"
+                >
+                  🌤️
+                </button>
+              </form>
+              {weatherLoading && <div className="h-16 animate-pulse rounded-lg bg-sky-200" />}
+              {!weatherLoading && weather && (
+                <div>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <p className="text-base font-bold text-sky-800">{weather.location}</p>
+                      <p className="text-xs text-sky-600">{weather.description}</p>
+                    </div>
+                    <p className="text-3xl font-black text-sky-700">{weather.temperature}°C</p>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-white/70 px-2 py-1.5">
+                      <p className="text-xs text-slate-500">Humidity</p>
+                      <p className="text-sm font-bold text-sky-700">{weather.humidity}%</p>
+                    </div>
+                    <div className="rounded-lg bg-white/70 px-2 py-1.5">
+                      <p className="text-xs text-slate-500">Wind</p>
+                      <p className="text-sm font-bold text-sky-700">{weather.windSpeed} km/h</p>
+                    </div>
+                    <div className="rounded-lg bg-white/70 px-2 py-1.5">
+                      <p className="text-xs text-slate-500">Rain</p>
+                      <p className="text-sm font-bold text-sky-700">{weather.precipitation}mm</p>
+                    </div>
+                  </div>
+                  <div className={`mt-2 rounded-lg px-3 py-1.5 text-xs ${weather.farmingSuitability.suitable ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {weather.farmingSuitability.suitable ? '✅' : '⚠️'} {weather.cropAdvice}
+                  </div>
+                  {weather.source === 'fallback' && (
+                    <p className="mt-1 text-[10px] text-slate-400">*Weather data from city profile. Add OpenWeatherMap API key for real-time data.</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">

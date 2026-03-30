@@ -1,36 +1,17 @@
-// nlpService.ts
+// nlpService.ts — NLP query processing (uses chatService for full implementation)
 
-import { Injectable } from 'nestjs';
-import * as natural from 'natural';
-
-@Injectable()
 export class NlpService {
-    private tokenizer: natural.WordTokenizer;
-
-    constructor() {
-        this.tokenizer = new natural.WordTokenizer();
-    }
-
     // Process a query in the specified language
     processQuery(query: string, language: string): string[] {
-        // You could add language-specific handling here
-        switch (language) {
-            case 'hi': // Hindi
-                return this.processHindiQuery(query);
-            case 'pa': // Punjabi
-                return this.processPunjabiQuery(query);
-            default:
-                return this.tokenizer.tokenize(query);
+        // Simple whitespace tokenizer
+        const tokens = query.toLowerCase().split(/\s+/).filter(t => t.length > 1);
+        // Language-specific post-processing could be added here
+        if (language === 'hi' || language === 'pa') {
+            // For Indic scripts, split on spaces as well
+            return query.split(/\s+/).filter(t => t.length > 0);
         }
-    }
-
-    private processHindiQuery(query: string): string[] {
-        // Add Hindi-specific processing here
-        return this.tokenizer.tokenize(query);
-    }
-
-    private processPunjabiQuery(query: string): string[] {
-        // Add Punjabi-specific processing here
-        return this.tokenizer.tokenize(query);
+        return tokens;
     }
 }
+
+export default NlpService;

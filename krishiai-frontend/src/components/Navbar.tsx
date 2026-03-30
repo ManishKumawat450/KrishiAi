@@ -9,6 +9,7 @@ const navItems = [
   { label: 'Disease', icon: '🦠', page: 'disease' },
   { label: 'Prices', icon: '💹', page: 'price' },
   { label: 'Fertilizer', icon: '🧪', page: 'fertilizer' },
+  { label: 'Chat', icon: '💬', page: 'chat' },
 ];
 
 export default function Navbar({ onNavigate }: NavbarProps) {

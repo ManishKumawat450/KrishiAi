@@ -3,19 +3,28 @@ import axios from 'axios';
 
 const API_BASE = 'http://localhost:5001/api';
 
-const CROPS = ['Rice', 'Wheat', 'Maize', 'Cotton', 'Sugarcane'];
+const CROPS = ['Rice', 'Wheat', 'Maize', 'Cotton', 'Sugarcane', 'Chickpea', 'Mustard', 'Soybean', 'Tomato', 'Groundnut', 'Onion'];
 
 interface FertilizerItem {
   name: string;
+  hindiName?: string;
   cost: number;
   quantity: number;
   unit: string;
   timing: string;
+  reason?: string;
+  applicationMethod?: string;
 }
 
 interface FertilizerResult {
+  crop?: string;
   fertilizers?: FertilizerItem[];
   totalCost?: number;
+  totalCostPerAcre?: number;
+  areaInAcres?: number;
+  soilHealthAdvice?: string;
+  organicAlternative?: string;
+  applicationSchedule?: string;
 }
 
 export default function FertilizerGuide() {
@@ -166,24 +175,57 @@ export default function FertilizerGuide() {
               <div className="space-y-4">
                 {result.fertilizers && result.fertilizers.map((fert, idx) => (
                   <article key={`${fert.name}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <h3 className="text-lg font-bold text-slate-900">{fert.name}</h3>
+                    <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900">{fert.name}</h3>
+                        {fert.hindiName && <p className="text-xs text-slate-500">{fert.hindiName}</p>}
+                      </div>
                       <span className="rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
-                        ₹{fert.cost}
+                        ₹{fert.cost}/acre
                       </span>
                     </div>
 
-                    <div className="space-y-2 text-sm text-slate-700">
+                    <div className="space-y-1 text-sm text-slate-700">
                       <p><strong>Quantity:</strong> {fert.quantity} {fert.unit}</p>
                       <p><strong>Timing:</strong> {fert.timing}</p>
+                      {fert.applicationMethod && <p><strong>How:</strong> {fert.applicationMethod}</p>}
+                      {fert.reason && <p className="text-xs text-slate-500 mt-1 italic">{fert.reason}</p>}
                     </div>
                   </article>
                 ))}
 
-                {result.totalCost && (
-                  <article className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 p-6 text-white">
-                    <p className="text-sm">Total Cost (1 acre)</p>
-                    <p className="mt-2 text-4xl font-black">₹{result.totalCost}</p>
+                <article className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 p-6 text-white">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <p className="text-sm opacity-80">Total Cost ({result.areaInAcres ?? 1} acre{(result.areaInAcres ?? 1) > 1 ? 's' : ''})</p>
+                      <p className="mt-1 text-4xl font-black">₹{result.totalCost ?? result.totalCostPerAcre}</p>
+                    </div>
+                    {result.areaInAcres && result.areaInAcres > 1 && result.totalCostPerAcre && (
+                      <div className="text-right text-sm opacity-80">
+                        <p>Per acre: ₹{result.totalCostPerAcre}</p>
+                      </div>
+                    )}
+                  </div>
+                </article>
+
+                {result.applicationSchedule && (
+                  <article className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-blue-700 mb-1">Application Schedule</p>
+                    <p className="text-sm text-blue-800">{result.applicationSchedule}</p>
+                  </article>
+                )}
+
+                {result.soilHealthAdvice && (
+                  <article className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-1">🌱 Soil Health Advice</p>
+                    <p className="text-sm text-emerald-800">{result.soilHealthAdvice}</p>
+                  </article>
+                )}
+
+                {result.organicAlternative && (
+                  <article className="rounded-xl border border-green-200 bg-green-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-green-700 mb-1">🌿 Organic Alternative</p>
+                    <p className="text-sm text-green-800">{result.organicAlternative}</p>
                   </article>
                 )}
               </div>

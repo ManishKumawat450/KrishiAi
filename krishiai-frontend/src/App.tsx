@@ -6,6 +6,7 @@ import CropRecommendation from './pages/CropRecommendation';
 import DiseaseDetection from './pages/DiseaseDetection';
 import PricePrediction from './pages/PricePrediction';
 import FertilizerGuide from './pages/FertilizerGuide';
+import Chat from './pages/Chat';
 import './App.css';
 
 function App() {
@@ -30,6 +31,9 @@ function App() {
     }
     if (currentPage === 'fertilizer') {
       return { type: 'ready' as const, node: <FertilizerGuide /> };
+    }
+    if (currentPage === 'chat') {
+      return { type: 'ready' as const, node: <Chat /> };
     }
 
     return { type: 'error' as const, node: null };
