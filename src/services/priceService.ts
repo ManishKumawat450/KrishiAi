@@ -96,6 +96,8 @@ const seasonalFactors: Record<string, number[]> = {
     onion:     [0.95, 0.96, 0.98, 1.00, 1.05, 1.10, 1.08, 1.03, 0.99, 0.97, 0.96, 0.95],
 };
 
+const Z_SCORE_95_PERCENT = 1.96; // z-score for 95% confidence interval
+
 export interface PricePredictionResult {
     crop: string;
     hindiName: string;
@@ -180,7 +182,7 @@ export function predictPrice(cropName: string, daysAhead: number): PricePredicti
     // ── Confidence interval (proportional to volatility and horizon) ──────────
     const volatility = computeVolatility(data.sevenDayHistory);
     const horizonFactor = Math.sqrt(daysAhead);         // uncertainty grows with sqrt(h)
-    const intervalWidth = Math.round(predictedPrice * volatility * horizonFactor * 1.96);
+    const intervalWidth = Math.round(predictedPrice * volatility * horizonFactor * Z_SCORE_95_PERCENT);
     const confidenceInterval = {
         lower: Math.max(0, predictedPrice - intervalWidth),
         upper: predictedPrice + intervalWidth,

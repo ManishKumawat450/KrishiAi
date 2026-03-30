@@ -9,6 +9,8 @@ export interface ProcessedImage {
     channels: number; // 3 for RGB
 }
 
+const EPSILON = 1e-6; // Prevents division by zero in ratio calculations
+
 /**
  * Preprocess an image buffer for CNN inference:
  * 1. Resize to targetSize x targetSize
@@ -77,7 +79,7 @@ export async function extractImageFeatures(imageBuffer: Buffer): Promise<ImageFe
     const brightness = (avgR + avgG + avgB) / 3;
 
     // Green channel dominance
-    const greenRatio = avgG / (avgR + avgG + avgB + 1e-6);
+    const greenRatio = avgG / (avgR + avgG + avgB + EPSILON);
 
     // Yellowness: high R + high G, low B
     const yellowScore = Math.min(1, Math.max(0, (avgR + avgG - 2 * avgB) / 1.5));
