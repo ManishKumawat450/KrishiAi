@@ -5,12 +5,25 @@ const API_BASE = 'http://localhost:5001/api';
 
 const CROPS = ['Rice', 'Wheat', 'Maize', 'Cotton', 'Sugarcane'];
 
+interface FertilizerItem {
+  name: string;
+  cost: number;
+  quantity: number;
+  unit: string;
+  timing: string;
+}
+
+interface FertilizerResult {
+  fertilizers?: FertilizerItem[];
+  totalCost?: number;
+}
+
 export default function FertilizerGuide() {
   const [cropType, setCropType] = useState('Rice');
   const [nitrogen, setNitrogen] = useState(30);
   const [phosphorus, setPhosphorus] = useState(15);
   const [potassium, setPotassium] = useState(20);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<FertilizerResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -28,31 +41,37 @@ export default function FertilizerGuide() {
         areaInAcres: 1
       });
       setResult(response.data.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error getting recommendations');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err)
+        ? err.response?.data?.error || 'Error getting recommendations'
+        : 'Error getting recommendations';
+      setError(message);
+      setResult(null);
     }
     
     setLoading(false);
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-yellow-800 mb-2">🧪 Fertilizer Guide</h1>
-        <p className="text-gray-600">Optimize fertilizer with cost breakdown</p>
-      </div>
+    <div className="mx-auto max-w-6xl">
+      <header className="mb-8">
+        <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">🧪 Fertilizer Guide</h1>
+        <p className="mt-2 text-sm text-slate-600 sm:text-base">Optimize nutrient mix with clear recommendations and cost guidance.</p>
+      </header>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Soil Analysis</h2>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-md backdrop-blur-sm sm:p-8">
+          <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">Soil Analysis</h2>
+          <p className="mt-1 text-sm text-slate-600">Adjust macro nutrients to receive an actionable fertilizer plan.</p>
           
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="mt-6 space-y-6">
             <div>
-              <label className="block font-semibold text-gray-700 mb-2">Crop Type</label>
+              <label htmlFor="fert-crop" className="mb-2 block text-sm font-semibold text-slate-800">Crop Type</label>
               <select
+                id="fert-crop"
                 value={cropType}
                 onChange={(e) => setCropType(e.target.value)}
-                className="w-full border-2 border-gray-300 rounded-lg px-4 py-2"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-slate-800 outline-none transition-colors duration-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
               >
                 {CROPS.map(crop => (
                   <option key={crop} value={crop}>{crop}</option>
@@ -61,95 +80,116 @@ export default function FertilizerGuide() {
             </div>
 
             <div>
-              <label className="block font-semibold text-gray-700 mb-2">
-                Nitrogen: {nitrogen} ppm
+              <label htmlFor="nitrogen" className="mb-2 block text-sm font-semibold text-slate-800">
+                Nitrogen: <span className="text-emerald-700">{nitrogen} ppm</span>
               </label>
               <input
+                id="nitrogen"
                 type="range"
                 min="0"
                 max="200"
                 value={nitrogen}
                 onChange={(e) => setNitrogen(parseInt(e.target.value))}
-                className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
+                className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-emerald-100"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-gray-700 mb-2">
-                Phosphorus: {phosphorus} ppm
+              <label htmlFor="phosphorus" className="mb-2 block text-sm font-semibold text-slate-800">
+                Phosphorus: <span className="text-cyan-700">{phosphorus} ppm</span>
               </label>
               <input
+                id="phosphorus"
                 type="range"
                 min="0"
                 max="100"
                 value={phosphorus}
                 onChange={(e) => setPhosphorus(parseInt(e.target.value))}
-                className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-cyan-100"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-gray-700 mb-2">
-                Potassium: {potassium} ppm
+              <label htmlFor="potassium" className="mb-2 block text-sm font-semibold text-slate-800">
+                Potassium: <span className="text-amber-700">{potassium} ppm</span>
               </label>
               <input
+                id="potassium"
                 type="range"
                 min="0"
                 max="150"
                 value={potassium}
                 onChange={(e) => setPotassium(parseInt(e.target.value))}
-                className="w-full h-2 bg-yellow-200 rounded-lg appearance-none cursor-pointer"
+                className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-amber-100"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-yellow-600 text-white font-bold py-3 rounded-lg hover:bg-yellow-700 transition disabled:opacity-50 text-lg"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-3 text-base font-bold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_35px_rgba(217,119,6,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? '⏳ Analyzing...' : '🧪 Get Recommendations'}
             </button>
           </form>
 
           {error && (
-            <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">
               ❌ {error}
             </div>
           )}
-        </div>
+        </section>
 
-        <div className="bg-yellow-50 p-8 rounded-lg">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Recommendations</h2>
+        <section className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-md backdrop-blur-sm sm:p-8">
+          <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">Recommendations</h2>
+          <p className="mt-1 text-sm text-slate-600">Balanced fertilizer set with timing and cost for one acre.</p>
           
-          {result ? (
-            <div className="space-y-4">
-              {result.fertilizers && result.fertilizers.map((fert: any, idx: number) => (
-                <div key={idx} className="bg-white p-6 rounded-lg border-l-4 border-yellow-600">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xl font-bold">{fert.name}</h3>
-                    <span className="bg-yellow-600 text-white px-3 py-1 rounded-full font-bold">
-                      ₹{fert.cost}
-                    </span>
+          <div className="mt-6" aria-live="polite">
+            {loading && (
+              <div className="space-y-3" role="status">
+                {[1, 2, 3].map((item) => (
+                  <div key={item} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="h-5 w-2/5 animate-pulse rounded bg-slate-200" />
+                    <div className="mt-3 h-3 w-full animate-pulse rounded bg-slate-200" />
                   </div>
-                  
-                  <div className="space-y-2 text-gray-700">
-                    <p><strong>Quantity:</strong> {fert.quantity} {fert.unit}</p>
-                    <p><strong>Timing:</strong> {fert.timing}</p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
 
-              {result.totalCost && (
-                <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-6 rounded-lg mt-4">
-                  <p className="text-lg mb-2">Total Cost (1 acre)</p>
-                  <p className="text-4xl font-bold">₹{result.totalCost}</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-gray-500">Adjust nutrient levels to get recommendations</p>
-          )}
-        </div>
+            {!loading && !error && !result && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-600">
+                Adjust nutrient levels and submit to receive fertilizer recommendations.
+              </div>
+            )}
+
+            {!loading && !error && result && (
+              <div className="space-y-4">
+                {result.fertilizers && result.fertilizers.map((fert, idx) => (
+                  <article key={`${fert.name}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h3 className="text-lg font-bold text-slate-900">{fert.name}</h3>
+                      <span className="rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                        ₹{fert.cost}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-sm text-slate-700">
+                      <p><strong>Quantity:</strong> {fert.quantity} {fert.unit}</p>
+                      <p><strong>Timing:</strong> {fert.timing}</p>
+                    </div>
+                  </article>
+                ))}
+
+                {result.totalCost && (
+                  <article className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 p-6 text-white">
+                    <p className="text-sm">Total Cost (1 acre)</p>
+                    <p className="mt-2 text-4xl font-black">₹{result.totalCost}</p>
+                  </article>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

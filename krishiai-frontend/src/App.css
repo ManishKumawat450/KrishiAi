@@ -1,38 +1,100 @@
-.App {
-  text-align: center;
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
+.app-shell {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.app-main {
+  width: min(1120px, calc(100% - var(--space-8)));
+  margin: var(--space-8) auto 0;
+  flex: 1;
+}
+
+.app-page-enter {
+  animation: appFadeIn var(--duration-base) var(--ease-standard);
+}
+
+.app-status-card {
+  border: 1px solid var(--border-soft);
+  background: linear-gradient(155deg, #ffffff 0%, var(--bg-surface-muted) 100%);
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-lg);
+  padding: clamp(var(--space-6), 3vw, var(--space-10));
+  display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  justify-content: space-between;
+  gap: var(--space-6);
 }
 
-.App-link {
-  color: #61dafb;
+.app-status-card h2 {
+  margin: 0;
+  font-size: clamp(1.1rem, 1.6vw, 1.5rem);
+  letter-spacing: -0.02em;
 }
 
-@keyframes App-logo-spin {
+.app-status-card p {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+}
+
+.app-status-error {
+  border-color: color-mix(in srgb, #b32720 30%, white 70%);
+  background: linear-gradient(155deg, #fff3f2 0%, #fffaf7 100%);
+}
+
+.app-spinner {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  border: 3px solid color-mix(in srgb, var(--brand-500) 25%, white 75%);
+  border-top-color: var(--brand-600);
+  animation: appSpin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+.app-cta {
+  border: 1px solid var(--brand-600);
+  background: var(--brand-600);
+  color: #ffffff;
+  padding: 0.7rem 1rem;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+.app-cta:hover {
+  background: var(--brand-700);
+  border-color: var(--brand-700);
+}
+
+@keyframes appFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes appSpin {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .app-main {
+    width: calc(100% - var(--space-6));
+    margin-top: var(--space-6);
+  }
+
+  .app-status-card {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

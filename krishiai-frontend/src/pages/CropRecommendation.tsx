@@ -3,11 +3,24 @@ import axios from 'axios';
 
 const API_BASE = 'http://localhost:5001/api';
 
+interface CropOption {
+  name: string;
+  suitability: number;
+}
+
+interface CropRecommendationData {
+  recommendations?: {
+    crop1?: CropOption;
+    crop2?: CropOption;
+    crop3?: CropOption;
+  };
+}
+
 export default function CropRecommendation() {
   const [temp, setTemp] = useState(28);
   const [rainfall, setRainfall] = useState(100);
   const [ph, setPh] = useState(6.5);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<CropRecommendationData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -23,144 +36,163 @@ export default function CropRecommendation() {
         phLevel: ph
       });
       setResult(response.data.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error getting recommendations');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err)
+        ? err.response?.data?.error || 'Error getting recommendations'
+        : 'Error getting recommendations';
+      setError(message);
+      setResult(null);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
+  const recommendations = [
+    result?.recommendations?.crop1,
+    result?.recommendations?.crop2,
+    result?.recommendations?.crop3,
+  ].filter((item): item is CropOption => Boolean(item));
+
+  const badgeStyles = [
+    'border-emerald-200 bg-emerald-100 text-emerald-800',
+    'border-amber-200 bg-amber-100 text-amber-800',
+    'border-orange-200 bg-orange-100 text-orange-800',
+  ];
+
+  const progressStyles = ['from-emerald-300 to-emerald-500', 'from-amber-300 to-amber-500', 'from-orange-300 to-orange-500'];
+
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-green-800 mb-2">🌱 Crop Recommendation</h1>
-        <p className="text-gray-600">Find the best crops for your farm</p>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Enter Farm Details</h2>
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="mx-auto max-w-6xl">
+      <header className="mb-8">
+        <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">🌱 Crop Recommendation</h1>
+        <p className="mt-2 text-sm text-slate-600 sm:text-base">
+          Adjust your farm conditions and get ranked crop options from the recommendation engine.
+        </p>
+      </header>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-md backdrop-blur-sm sm:p-8">
+          <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">Farm Conditions</h2>
+          <p className="mt-1 text-sm text-slate-600">Tune inputs precisely to match your local field profile.</p>
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-6">
             <div>
-              <label className="block font-semibold text-gray-700 mb-2">
-                Temperature: {temp}°C
+              <label htmlFor="temperature" className="mb-2 block text-sm font-semibold text-slate-800">
+                Temperature: <span className="text-emerald-700">{temp}°C</span>
               </label>
               <input
+                id="temperature"
                 type="range"
                 min="-10"
                 max="50"
                 value={temp}
                 onChange={(e) => setTemp(parseFloat(e.target.value))}
-                className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
+                className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-emerald-100"
+                aria-describedby="temperature-help"
               />
+              <p id="temperature-help" className="mt-1 text-xs text-slate-500">Expected local average in Celsius.</p>
             </div>
 
             <div>
-              <label className="block font-semibold text-gray-700 mb-2">
-                Rainfall: {rainfall}mm
+              <label htmlFor="rainfall" className="mb-2 block text-sm font-semibold text-slate-800">
+                Rainfall: <span className="text-cyan-700">{rainfall} mm</span>
               </label>
               <input
+                id="rainfall"
                 type="range"
                 min="0"
                 max="300"
                 value={rainfall}
                 onChange={(e) => setRainfall(parseFloat(e.target.value))}
-                className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-cyan-100"
+                aria-describedby="rainfall-help"
               />
+              <p id="rainfall-help" className="mt-1 text-xs text-slate-500">Estimated rainfall in millimeters.</p>
             </div>
 
             <div>
-              <label className="block font-semibold text-gray-700 mb-2">
-                Soil pH: {ph.toFixed(1)}
+              <label htmlFor="soil-ph" className="mb-2 block text-sm font-semibold text-slate-800">
+                Soil pH: <span className="text-violet-700">{ph.toFixed(1)}</span>
               </label>
               <input
+                id="soil-ph"
                 type="range"
                 min="4"
                 max="9"
                 step="0.1"
                 value={ph}
                 onChange={(e) => setPh(parseFloat(e.target.value))}
-                className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-violet-100"
+                aria-describedby="ph-help"
               />
+              <p id="ph-help" className="mt-1 text-xs text-slate-500">Ideal farming range is typically between 5.5 and 7.5.</p>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition disabled:opacity-50 text-lg"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-5 py-3 text-base font-bold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_35px_rgba(22,163,74,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? '⏳ Getting recommendations...' : '🚀 Get Recommendations'}
             </button>
           </form>
+        </section>
 
-          {error && (
-            <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-              ❌ {error}
-            </div>
-          )}
-        </div>
+        <section className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-md backdrop-blur-sm sm:p-8">
+          <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">Recommendations</h2>
+          <p className="mt-1 text-sm text-slate-600">Ranked by suitability for your selected conditions.</p>
 
-        <div className="bg-green-50 p-8 rounded-lg">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Recommendations</h2>
-          
-          {result ? (
-            <div className="space-y-4">
-              {result.recommendations?.crop1 && (
-                <div className="bg-white p-4 rounded-lg border-l-4 border-green-600">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-bold text-lg">{result.recommendations.crop1.name}</p>
-                    <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-bold">
-                      {result.recommendations.crop1.suitability}%
-                    </span>
+          <div className="mt-6" aria-live="polite">
+            {loading && (
+              <div className="space-y-3" role="status">
+                {[1, 2, 3].map((item) => (
+                  <div key={item} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="h-5 w-40 animate-pulse rounded bg-slate-200" />
+                    <div className="mt-3 h-2 w-full animate-pulse rounded bg-slate-200" />
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-green-600 h-2 rounded-full"
-                      style={{width: `${result.recommendations.crop1.suitability}%`}}
-                    ></div>
-                  </div>
-                </div>
-              )}
-              
-              {result.recommendations?.crop2 && (
-                <div className="bg-white p-4 rounded-lg border-l-4 border-yellow-600">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-bold text-lg">{result.recommendations.crop2.name}</p>
-                    <span className="bg-yellow-600 text-white px-3 py-1 rounded-full text-sm font-bold">
-                      {result.recommendations.crop2.suitability}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-yellow-600 h-2 rounded-full"
-                      style={{width: `${result.recommendations.crop2.suitability}%`}}
-                    ></div>
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
+            )}
 
-              {result.recommendations?.crop3 && (
-                <div className="bg-white p-4 rounded-lg border-l-4 border-orange-600">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-bold text-lg">{result.recommendations.crop3.name}</p>
-                    <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-sm font-bold">
-                      {result.recommendations.crop3.suitability}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-orange-600 h-2 rounded-full"
-                      style={{width: `${result.recommendations.crop3.suitability}%`}}
-                    ></div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-gray-500">Enter your farm details to get recommendations</p>
-          )}
-        </div>
+            {!loading && error && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700" role="alert">
+                <p>❌ {error}</p>
+              </div>
+            )}
+
+            {!loading && !error && recommendations.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-600">
+                Enter your farm details and submit to see crop recommendations.
+              </div>
+            )}
+
+            {!loading && !error && recommendations.length > 0 && (
+              <div className="space-y-3">
+                {recommendations.map((crop, index) => (
+                  <article key={`${crop.name}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-base font-bold text-slate-900 sm:text-lg">{crop.name}</p>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-bold ${badgeStyles[index] || badgeStyles[2]}`}>
+                        {crop.suitability}% match
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full rounded-full bg-slate-200">
+                      <div
+                        className={`h-2.5 rounded-full bg-gradient-to-r ${progressStyles[index] || progressStyles[2]} transition-all duration-500`}
+                        style={{ width: `${crop.suitability}%` }}
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={crop.suitability}
+                        aria-label={`${crop.name} suitability`}
+                      />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );
