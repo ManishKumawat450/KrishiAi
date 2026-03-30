@@ -6,8 +6,8 @@ const router: Router = express.Router();
  * Health Check Endpoint
  * GET /api/health
  */
-router.get('/health', (req: Request, res: Response) => {
-    res.status(200).json({
+router.get('/health', (_req: Request, res: Response) => {
+    return res.status(200).json({
         status: 'operational',
         timestamp: new Date().toISOString(),
         service: 'KrishiAI Backend',
@@ -21,7 +21,7 @@ router.get('/health', (req: Request, res: Response) => {
  */
 router.post('/crops/recommend', (req: Request, res: Response) => {
     try {
-        const { temperature, rainfall, phLevel, moisture, nitrogen } = req.body;
+        const { temperature, rainfall, phLevel } = req.body;
 
         // Validation
         if (!temperature || !rainfall || !phLevel) {
@@ -38,7 +38,7 @@ router.post('/crops/recommend', (req: Request, res: Response) => {
             crop3: { name: 'Maize', suitability: 65 }
         };
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data: {
                 recommendations,
@@ -46,7 +46,7 @@ router.post('/crops/recommend', (req: Request, res: Response) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             error: 'Error processing crop recommendations',
             details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -88,12 +88,12 @@ router.post('/disease/detect', (req: Request, res: Response) => {
             ]
         };
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data: detection
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             error: 'Error detecting disease',
             details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -134,12 +134,12 @@ router.get('/prices/predict', (req: Request, res: Response) => {
             confidence: 85
         };
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data: prediction
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             error: 'Error predicting price',
             details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -152,7 +152,7 @@ router.get('/prices/predict', (req: Request, res: Response) => {
  */
 router.post('/fertilizer/recommend', (req: Request, res: Response) => {
     try {
-        const { cropType, nitrogen, phosphorus, potassium, areaInAcres } = req.body;
+        const { cropType, nitrogen, phosphorus, potassium } = req.body;
 
         // Validation
         if (!cropType || nitrogen === undefined || phosphorus === undefined || potassium === undefined) {
@@ -177,12 +177,12 @@ router.post('/fertilizer/recommend', (req: Request, res: Response) => {
             totalCost: 2700
         };
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data: recommendations
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             error: 'Error generating fertilizer recommendations',
             details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -218,12 +218,12 @@ router.get('/weather', (req: Request, res: Response) => {
             }
         };
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data: weatherData
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             error: 'Error fetching weather data',
             details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -255,12 +255,12 @@ router.post('/nlp/query', (req: Request, res: Response) => {
             response: 'Based on your query, I recommend growing rice and wheat.'
         };
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data: nlpResponse
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             error: 'Error processing query',
             details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -271,11 +271,11 @@ router.post('/nlp/query', (req: Request, res: Response) => {
  * Available Crops Endpoint
  * GET /api/crops/list
  */
-router.get('/crops/list', (req: Request, res: Response) => {
+router.get('/crops/list', (_req: Request, res: Response) => {
     try {
         const crops = ['Rice', 'Wheat', 'Maize', 'Cotton', 'Sugarcane'];
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data: {
                 crops: crops,
@@ -283,7 +283,7 @@ router.get('/crops/list', (req: Request, res: Response) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             error: 'Error fetching crops list',
             details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -294,7 +294,7 @@ router.get('/crops/list', (req: Request, res: Response) => {
  * Available Diseases Endpoint
  * GET /api/disease/list
  */
-router.get('/disease/list', (req: Request, res: Response) => {
+router.get('/disease/list', (_req: Request, res: Response) => {
     try {
         const diseases = [
             'Powdery Mildew',
@@ -304,7 +304,7 @@ router.get('/disease/list', (req: Request, res: Response) => {
             'Downy Mildew'
         ];
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data: {
                 diseases: diseases,
@@ -312,7 +312,7 @@ router.get('/disease/list', (req: Request, res: Response) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             error: 'Error fetching diseases list',
             details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -323,7 +323,7 @@ router.get('/disease/list', (req: Request, res: Response) => {
  * API Documentation Endpoint
  * GET /api/docs
  */
-router.get('/docs', (req: Request, res: Response) => {
+router.get('/docs', (_req: Request, res: Response) => {
     const documentation = {
         title: 'KrishiAI API Documentation',
         version: '1.0.0',
@@ -395,12 +395,12 @@ router.get('/docs', (req: Request, res: Response) => {
         }
     };
 
-    res.status(200).json(documentation);
+    return res.status(200).json(documentation);
 });
 
 // 404 Handler for undefined routes
 router.use((req: Request, res: Response) => {
-    res.status(404).json({
+    return res.status(404).json({
         error: 'Endpoint not found',
         path: req.path,
         method: req.method,

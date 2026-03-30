@@ -12,7 +12,7 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
     res.json({
         status: 'operational',
         timestamp: new Date().toISOString(),
@@ -24,7 +24,7 @@ app.get('/health', (req, res) => {
 app.use('/api', apiRoutes);
 
 // AI agents status endpoint
-app.get('/api/agents/status', (req, res) => {
+app.get('/api/agents/status', (_req, res) => {
     res.json({
         status: 'active',
         agents: {
@@ -51,7 +51,7 @@ app.use((req, res) => {
 });
 
 // Error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('Error:', err);
     res.status(500).json({
         error: 'Internal server error',
