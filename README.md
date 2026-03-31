@@ -21,6 +21,11 @@ KrishiAI helps Indian farmers make smarter, data-driven decisions through 6 AI-p
 | 🌤️ **Weather Intelligence** | Real-time weather data for any Indian city via OpenWeatherMap API |
 | 💬 **AI Chat Assistant** | NLP-based farmer support chatbot (English, Hindi, Punjabi) |
 
+
+## System Architecture
+<img width="2572" height="916" alt="mermaid-diagram" src="https://github.com/user-attachments/assets/8d04baf6-8349-4368-a48b-6cd238513424" />
+
+
 ## 🏃 Quick Start (5 minutes)
 
 ### Option 1: Docker (Easiest)
