@@ -95,19 +95,22 @@ function getNutrientDeficiency(value: number, levels: { low: number; medium: num
 // ── ML Soil Health Scoring ────────────────────────────────────────────────────
 // Computes a composite 0–100 soil health score based on NPK levels relative to
 // optimal ranges.  Weights reflect agronomic importance.
-function computeSoilHealthScore(nitrogen: number, phosphorus: number, potassium: number): number {
-    // Optimal / ideal ranges (ppm)
-    const optimalN = 75, optimalP = 25, optimalK = 150;
 
+/** Optimal soil nutrient levels (ppm) for general Indian agricultural soils. */
+const OPTIMAL_N_PPM = 75;   // Available nitrogen (kg/ha equivalent ~75 ppm)
+const OPTIMAL_P_PPM = 25;   // Available phosphorus
+const OPTIMAL_K_PPM = 150;  // Available potassium
+
+function computeSoilHealthScore(nitrogen: number, phosphorus: number, potassium: number): number {
     // Individual component scores (sigmoid-like, max = 1.0)
-    const scoreN = Math.min(1, nitrogen  / optimalN);
-    const scoreP = Math.min(1, phosphorus / optimalP);
-    const scoreK = Math.min(1, potassium  / optimalK);
+    const scoreN = Math.min(1, nitrogen  / OPTIMAL_N_PPM);
+    const scoreP = Math.min(1, phosphorus / OPTIMAL_P_PPM);
+    const scoreK = Math.min(1, potassium  / OPTIMAL_K_PPM);
 
     // Penalty for extreme over-supply (above 2× optimal)
-    const penaltyN = nitrogen  > optimalN  * 2 ? 0.10 : 0;
-    const penaltyP = phosphorus > optimalP * 2 ? 0.05 : 0;
-    const penaltyK = potassium  > optimalK  * 2 ? 0.05 : 0;
+    const penaltyN = nitrogen  > OPTIMAL_N_PPM  * 2 ? 0.10 : 0;
+    const penaltyP = phosphorus > OPTIMAL_P_PPM * 2 ? 0.05 : 0;
+    const penaltyK = potassium  > OPTIMAL_K_PPM  * 2 ? 0.05 : 0;
 
     // Weighted composite: N is most important
     const composite = (scoreN * 0.40 + scoreP * 0.30 + scoreK * 0.30) - penaltyN - penaltyP - penaltyK;

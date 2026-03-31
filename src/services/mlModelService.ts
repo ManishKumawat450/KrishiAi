@@ -235,9 +235,11 @@ export class MLModelService {
             candidates.push({ classIdx: 37, score: 0.70 }); // Healthy (Tomato)
         }
 
-        // Default fallback — Bacterial Blight (common, generic)
+        // Default fallback — Bacterial Spot (class 28, common & generic)
+        const FALLBACK_CLASS_IDX = 28;   // PlantVillage label: Tomato Bacterial Spot
+        const FALLBACK_BASE_SCORE = 0.55; // Moderate default confidence for the fallback
         if (candidates.length === 0) {
-            candidates.push({ classIdx: 28, score: 0.55 });
+            candidates.push({ classIdx: FALLBACK_CLASS_IDX, score: FALLBACK_BASE_SCORE });
         }
 
         // Normalise scores to [0, 1]

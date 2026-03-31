@@ -166,21 +166,23 @@ function fuzzyRangeDistance(value: number, min: number, max: number, scale: numb
 }
 
 // ── Seasonal adjustment ────────────────────────────────────────────────────────
+// Module-level constants for season month sets (avoid re-creation on each call)
+const KHARIF_MONTHS  = new Set([5, 6, 7, 8, 9]);      // Jun–Oct (0-indexed)
+const RABI_MONTHS    = new Set([9, 10, 11, 0, 1, 2]);  // Oct–Mar
+const SUMMER_MONTHS  = new Set([2, 3, 4, 5]);           // Mar–Jun
+
 /** Return a seasonal bonus in [0, 1] for a crop given the current month (0-indexed). */
 function seasonalScore(crop: CropProfile): number {
     const month = new Date().getMonth(); // 0=Jan, …, 11=Dec
-    const kharifMonths  = new Set([5, 6, 7, 8, 9]);          // Jun–Oct
-    const rabiMonths    = new Set([9, 10, 11, 0, 1, 2]);      // Oct–Mar
-    const summerMonths  = new Set([2, 3, 4, 5]);              // Mar–Jun
     const yearRoundStr  = 'year-round';
 
     const s = crop.season.toLowerCase();
     if (s.includes(yearRoundStr)) return 0.9;
-    if (s.includes('kharif') && kharifMonths.has(month)) return 1.0;
-    if (s.includes('rabi')   && rabiMonths.has(month))   return 1.0;
-    if (s.includes('summer') && summerMonths.has(month)) return 1.0;
-    if (s.includes('kharif') && !kharifMonths.has(month)) return 0.4;
-    if (s.includes('rabi')   && !rabiMonths.has(month))   return 0.4;
+    if (s.includes('kharif') && KHARIF_MONTHS.has(month)) return 1.0;
+    if (s.includes('rabi')   && RABI_MONTHS.has(month))   return 1.0;
+    if (s.includes('summer') && SUMMER_MONTHS.has(month)) return 1.0;
+    if (s.includes('kharif') && !KHARIF_MONTHS.has(month)) return 0.4;
+    if (s.includes('rabi')   && !RABI_MONTHS.has(month))   return 0.4;
     return 0.7;
 }
 

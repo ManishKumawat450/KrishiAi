@@ -9,6 +9,9 @@ import { processChat } from '../services/chatService';
 import { MLModelService } from '../services/mlModelService';
 import { NlpService } from '../services/nlpService';
 
+/** Maximum number of NLP tokens included in API responses (to keep payload size manageable). */
+const MAX_NLP_TOKENS_IN_RESPONSE = 20;
+
 // Multer: store uploaded images in memory (no disk writes needed for symptom-based detection)
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -409,7 +412,7 @@ router.post('/chat', (req: Request, res: Response) => {
                     confidence: nlpResult.confidence,
                     entities: nlpResult.entities,
                     language: nlpResult.language,
-                    tokens: nlpResult.tokens.slice(0, 20), // Limit for response size
+                    tokens: nlpResult.tokens.slice(0, MAX_NLP_TOKENS_IN_RESPONSE),
                 },
             },
         });

@@ -45,6 +45,8 @@ interface ImageDiseaseResult {
   allPredictions?: Array<{ label: string; confidence: number }>;
 }
 
+const INFERENCE_STEP_DELAY_MS = 600; // milliseconds between inference step animations
+
 const INFERENCE_STEPS = [
   '📥 Receiving image…',
   '🔧 Preprocessing (resize 224×224, normalize)…',
@@ -139,7 +141,7 @@ export default function DiseaseDetection() {
         clearInterval(stepInterval);
         return prev;
       });
-    }, 600);
+    }, INFERENCE_STEP_DELAY_MS);
 
     try {
       const formData = new FormData();
