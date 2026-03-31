@@ -14,7 +14,7 @@ const SYMPTOMS = [
   'Stunted growth'
 ];
 
-const CROPS = ['Rice', 'Wheat', 'Maize', 'Cotton', 'Sugarcane'];
+const CROPS = ['Rice', 'Wheat', 'Maize', 'Cotton', 'Sugarcane', 'Tomato', 'Potato', 'Soybean'];
 
 interface DiseaseResult {
   disease: string;
@@ -30,6 +30,31 @@ interface DiseaseResult {
   matchedSymptoms?: string[];
 }
 
+// AI/CNN image detection result shape (from /api/disease/detect-image)
+interface ImageDiseaseResult {
+  disease: string;
+  hindiName: string;
+  confidence: number;        // 0–1 from model
+  severity: string;
+  crop: string;
+  treatment: string[];
+  prevention: string[];
+  organicAlternative: string;
+  estimatedYieldLoss: string;
+  modelUsed: 'cnn' | 'heuristic';
+  allPredictions?: Array<{ label: string; confidence: number }>;
+}
+
+const INFERENCE_STEP_DELAY_MS = 600; // milliseconds between inference step animations
+
+const INFERENCE_STEPS = [
+  '📥 Receiving image…',
+  '🔧 Preprocessing (resize 224×224, normalize)…',
+  '🧠 Running AI inference…',
+  '📊 Computing confidence scores…',
+  '✅ Generating diagnosis report…',
+];
+
 export default function DiseaseDetection() {
   const [activeTab, setActiveTab] = useState<'symptoms' | 'image'>('symptoms');
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
@@ -42,9 +67,10 @@ export default function DiseaseDetection() {
   const [imageCropType, setImageCropType] = useState('Rice');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageResult, setImageResult] = useState<DiseaseResult | null>(null);
+  const [imageResult, setImageResult] = useState<ImageDiseaseResult | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState('');
+  const [inferenceStep, setInferenceStep] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleSymptom = (symptom: string) => {
@@ -106,15 +132,29 @@ export default function DiseaseDetection() {
     }
     setImageLoading(true);
     setImageError('');
+    setInferenceStep(0);
+
+    // Animate inference steps for UX feedback
+    const stepInterval = setInterval(() => {
+      setInferenceStep(prev => {
+        if (prev < INFERENCE_STEPS.length - 2) return prev + 1;
+        clearInterval(stepInterval);
+        return prev;
+      });
+    }, INFERENCE_STEP_DELAY_MS);
+
     try {
       const formData = new FormData();
       formData.append('image', imageFile);
       formData.append('cropType', imageCropType);
-      const response = await axios.post(`${API_BASE}/disease/detect-symptoms`, formData, {
+      const response = await axios.post(`${API_BASE}/disease/detect-image`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      setInferenceStep(INFERENCE_STEPS.length - 1);
+      clearInterval(stepInterval);
       setImageResult(response.data.data);
     } catch (err: unknown) {
+      clearInterval(stepInterval);
       const message = axios.isAxiosError(err)
         ? err.response?.data?.error || 'Error analyzing image'
         : 'Error analyzing image';
@@ -389,15 +429,22 @@ export default function DiseaseDetection() {
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-md backdrop-blur-sm sm:p-8">
-          <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">Analysis</h2>
-          <p className="mt-1 text-sm text-slate-600">Diagnosis from uploaded image.</p>
+          <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">AI Analysis</h2>
+          <p className="mt-1 text-sm text-slate-600">Diagnosis from uploaded image using computer vision.</p>
 
           <div className="mt-6" aria-live="polite">
             {imageLoading && (
               <div className="space-y-3" role="status">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="h-6 w-1/2 animate-pulse rounded bg-slate-200" />
-                  <div className="mt-3 h-5 w-1/3 animate-pulse rounded bg-slate-200" />
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                  <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-3">🤖 AI Inference in Progress</p>
+                  <ul className="space-y-2">
+                    {INFERENCE_STEPS.map((step, idx) => (
+                      <li key={idx} className={`flex items-center gap-2 text-sm transition-opacity ${idx <= inferenceStep ? 'opacity-100 font-medium text-indigo-700' : 'opacity-30 text-slate-500'}`}>
+                        {idx < inferenceStep ? '✅' : idx === inferenceStep ? '⏳' : '○'}
+                        {step}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
             )}
@@ -410,23 +457,42 @@ export default function DiseaseDetection() {
 
             {!imageLoading && !imageError && !imageResult && (
               <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-600">
-                Upload a crop photo and run analysis to see the diagnosis.
+                <p className="text-2xl mb-2">🔬</p>
+                <p>Upload a crop leaf photo and click <strong>Analyze Image</strong> to run AI disease detection.</p>
+                <p className="mt-1 text-xs text-slate-400">Powered by image analysis + CNN classification</p>
               </div>
             )}
 
             {!imageLoading && !imageError && imageResult && (
               <div className="space-y-4">
+                {/* Model badge */}
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${imageResult.modelUsed === 'cnn' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'}`}>
+                    {imageResult.modelUsed === 'cnn' ? '🧠 CNN Model' : '🔍 Visual Analysis'}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {imageResult.modelUsed === 'cnn' ? 'PlantVillage CNN inference' : 'Heuristic image analysis (deploy model for CNN)'}
+                  </span>
+                </div>
+
                 <article className="rounded-xl border border-rose-200 bg-rose-50 p-5">
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div>
                       <h3 className="text-2xl font-black text-rose-700">{imageResult.disease}</h3>
                       {imageResult.hindiName && <p className="mt-0.5 text-sm text-rose-500">{imageResult.hindiName}</p>}
+                      {imageResult.crop && <p className="mt-0.5 text-xs text-rose-400">Crop: {imageResult.crop}</p>}
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <span className="inline-flex items-center rounded-full border border-rose-300 bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700">
-                        {imageResult.confidence}% confidence
-                      </span>
-                      {imageResult.severity && (
+                      {/* Confidence bar */}
+                      <div className="text-right">
+                        <span className="inline-flex items-center rounded-full border border-rose-300 bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700">
+                          {Math.round(imageResult.confidence * 100)}% confidence
+                        </span>
+                        <div className="mt-1 w-32 bg-rose-100 rounded-full h-1.5">
+                          <div className="bg-rose-500 h-1.5 rounded-full" style={{ width: `${Math.round(imageResult.confidence * 100)}%` }} />
+                        </div>
+                      </div>
+                      {imageResult.severity && imageResult.severity !== 'None' && imageResult.severity !== 'Unknown' && (
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                           imageResult.severity === 'Critical' ? 'bg-red-100 text-red-800' :
                           imageResult.severity === 'High' ? 'bg-orange-100 text-orange-800' :
@@ -437,18 +503,16 @@ export default function DiseaseDetection() {
                       )}
                     </div>
                   </div>
-                  {imageResult.cause && <p className="mt-2 text-xs text-rose-600">Cause: {imageResult.cause}</p>}
-                  {imageResult.description && <p className="mt-2 text-sm text-rose-700">{imageResult.description}</p>}
-                  {imageResult.estimatedYieldLoss && (
+                  {imageResult.estimatedYieldLoss && imageResult.estimatedYieldLoss !== '0%' && (
                     <p className="mt-2 text-xs font-semibold text-rose-600">⚠️ Estimated yield loss: {imageResult.estimatedYieldLoss}</p>
                   )}
                 </article>
 
-                {imageResult.controlMethods && imageResult.controlMethods.length > 0 && (
+                {imageResult.treatment && imageResult.treatment.length > 0 && (
                   <article className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                    <h4 className="text-base font-bold text-slate-900">💊 Control Methods</h4>
+                    <h4 className="text-base font-bold text-slate-900">💊 Treatment</h4>
                     <ul className="mt-3 space-y-2">
-                      {imageResult.controlMethods.map((method, idx) => (
+                      {imageResult.treatment.map((method, idx) => (
                         <li key={idx} className="flex items-start gap-3">
                           <span className="mt-0.5 text-emerald-600 font-bold">✓</span>
                           <span className="text-sm text-slate-700">{method}</span>
@@ -458,11 +522,11 @@ export default function DiseaseDetection() {
                   </article>
                 )}
 
-                {imageResult.preventiveMeasures && imageResult.preventiveMeasures.length > 0 && (
+                {imageResult.prevention && imageResult.prevention.length > 0 && (
                   <article className="rounded-xl border border-blue-200 bg-blue-50 p-5">
                     <h4 className="text-base font-bold text-blue-900">🛡️ Prevention</h4>
                     <ul className="mt-3 space-y-2">
-                      {imageResult.preventiveMeasures.map((m, idx) => (
+                      {imageResult.prevention.map((m, idx) => (
                         <li key={idx} className="flex items-start gap-3">
                           <span className="mt-0.5 text-blue-600">•</span>
                           <span className="text-sm text-blue-800">{m}</span>
@@ -472,10 +536,31 @@ export default function DiseaseDetection() {
                   </article>
                 )}
 
-                {imageResult.organicTreatment && (
+                {imageResult.organicAlternative && (
                   <article className="rounded-xl border border-green-200 bg-green-50 p-4">
-                    <h4 className="text-base font-bold text-green-900">🌿 Organic Treatment</h4>
-                    <p className="mt-2 text-sm text-green-800">{imageResult.organicTreatment}</p>
+                    <h4 className="text-base font-bold text-green-900">🌿 Organic Alternative</h4>
+                    <p className="mt-2 text-sm text-green-800">{imageResult.organicAlternative}</p>
+                  </article>
+                )}
+
+                {imageResult.allPredictions && imageResult.allPredictions.length > 1 && (
+                  <article className="rounded-xl border border-slate-200 bg-white p-5">
+                    <h4 className="text-base font-bold text-slate-900">📊 Top AI Predictions</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">Other diseases considered by the model:</p>
+                    <ul className="mt-3 space-y-2">
+                      {imageResult.allPredictions.map((pred, idx) => (
+                        <li key={idx} className="flex items-center gap-3">
+                          <span className="text-xs font-mono text-slate-400 w-4">{idx + 1}.</span>
+                          <span className="text-sm text-slate-700 flex-1">{pred.label}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-20 bg-slate-100 rounded-full h-1.5">
+                              <div className="bg-indigo-400 h-1.5 rounded-full" style={{ width: `${Math.round(pred.confidence * 100)}%` }} />
+                            </div>
+                            <span className="text-xs text-slate-500 w-8 text-right">{Math.round(pred.confidence * 100)}%</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   </article>
                 )}
               </div>

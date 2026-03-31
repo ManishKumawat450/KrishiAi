@@ -51,8 +51,11 @@ export interface FertilizerResult {
     totalCost: number;
     areaInAcres: number;
     soilHealthAdvice: string;
+    soilHealthScore: number;         // 0–100 ML soil health score
     organicAlternative: string;
     applicationSchedule: string;
+    cropRotationSuggestion: string;  // ML-based rotation recommendation
+    costOptimization: string;        // Cost optimisation advice
 }
 
 // Crop-specific NPK requirements (kg per acre)
@@ -87,6 +90,67 @@ function getNutrientDeficiency(value: number, levels: { low: number; medium: num
     if (value < levels.medium) return 'Low';
     if (value < levels.high) return 'Adequate';
     return 'High';
+}
+
+// ── ML Soil Health Scoring ────────────────────────────────────────────────────
+// Computes a composite 0–100 soil health score based on NPK levels relative to
+// optimal ranges.  Weights reflect agronomic importance.
+
+/** Optimal soil nutrient levels (ppm) for general Indian agricultural soils. */
+const OPTIMAL_N_PPM = 75;   // Available nitrogen (kg/ha equivalent ~75 ppm)
+const OPTIMAL_P_PPM = 25;   // Available phosphorus
+const OPTIMAL_K_PPM = 150;  // Available potassium
+
+function computeSoilHealthScore(nitrogen: number, phosphorus: number, potassium: number): number {
+    // Individual component scores (sigmoid-like, max = 1.0)
+    const scoreN = Math.min(1, nitrogen  / OPTIMAL_N_PPM);
+    const scoreP = Math.min(1, phosphorus / OPTIMAL_P_PPM);
+    const scoreK = Math.min(1, potassium  / OPTIMAL_K_PPM);
+
+    // Penalty for extreme over-supply (above 2× optimal)
+    const penaltyN = nitrogen  > OPTIMAL_N_PPM  * 2 ? 0.10 : 0;
+    const penaltyP = phosphorus > OPTIMAL_P_PPM * 2 ? 0.05 : 0;
+    const penaltyK = potassium  > OPTIMAL_K_PPM  * 2 ? 0.05 : 0;
+
+    // Weighted composite: N is most important
+    const composite = (scoreN * 0.40 + scoreP * 0.30 + scoreK * 0.30) - penaltyN - penaltyP - penaltyK;
+    return Math.round(Math.max(0, Math.min(1, composite)) * 100);
+}
+
+// ── Crop Rotation Recommendation (rule-based ML) ──────────────────────────────
+const CROP_ROTATION: Record<string, string[]> = {
+    wheat:     ['Chickpea', 'Mustard', 'Sunflower'],
+    rice:      ['Wheat', 'Mustard', 'Potato'],
+    maize:     ['Soybean', 'Chickpea', 'Wheat'],
+    cotton:    ['Wheat', 'Maize', 'Chickpea'],
+    sugarcane: ['Wheat', 'Maize', 'Mustard'],
+    chickpea:  ['Wheat', 'Maize', 'Mustard'],
+    mustard:   ['Rice', 'Maize', 'Soybean'],
+    soybean:   ['Wheat', 'Maize', 'Sorghum'],
+    tomato:    ['Onion', 'Maize', 'Beans'],
+    groundnut: ['Wheat', 'Maize', 'Sorghum'],
+    onion:     ['Tomato', 'Maize', 'Wheat'],
+    default:   ['Legume', 'Cereal', 'Oilseed'],
+};
+
+function getCropRotationSuggestion(cropKey: string): string {
+    const options = CROP_ROTATION[cropKey] ?? CROP_ROTATION.default;
+    return `After ${cropKey.charAt(0).toUpperCase() + cropKey.slice(1)}, consider rotating with: ${options.join(' → ')}. ` +
+           `Crop rotation replenishes soil nutrients and breaks pest/disease cycles.`;
+}
+
+// ── Cost Optimisation ─────────────────────────────────────────────────────────
+function getCostOptimizationAdvice(totalCostPerAcre: number, soilHealthScore: number): string {
+    if (soilHealthScore >= 75) {
+        return `Your soil health is good (score: ${soilHealthScore}/100). Reduce chemical fertilizer by 20–25% and ` +
+               `supplement with vermicompost to save ₹${Math.round(totalCostPerAcre * 0.22)}/acre.`;
+    }
+    if (soilHealthScore >= 50) {
+        return `Moderate soil health (score: ${soilHealthScore}/100). Apply biofertilizers (PSB + KSB) alongside ` +
+               `chemical inputs to save up to 15% fertilizer cost (≈₹${Math.round(totalCostPerAcre * 0.15)}/acre).`;
+    }
+    return `Low soil health (score: ${soilHealthScore}/100). Invest in soil restoration this season: apply ` +
+           `5 tonnes FYM/acre. Long-term savings will exceed short-term cost.`;
 }
 
 export function recommendFertilizer(input: FertilizerInput): FertilizerResult {
@@ -178,7 +242,10 @@ export function recommendFertilizer(input: FertilizerInput): FertilizerResult {
     const totalCostPerAcre = fertilizers.reduce((sum, f) => sum + f.cost, 0);
     const totalCost = Math.round(totalCostPerAcre * area);
 
-    // Soil health advice
+    // ── ML Soil Health Score ───────────────────────────────────────────────────
+    const soilHealthScore = computeSoilHealthScore(input.nitrogen, input.phosphorus, input.potassium);
+
+    // ── Soil health advice ─────────────────────────────────────────────────────
     const issues: string[] = [];
     if (nStatus === 'Very Low' || nStatus === 'Low') issues.push('Low nitrogen — consider green manure crop next season');
     if (pStatus === 'Very Low' || pStatus === 'Low') issues.push('Low phosphorus — improve with organic matter');
@@ -195,7 +262,10 @@ export function recommendFertilizer(input: FertilizerInput): FertilizerResult {
         totalCost,
         areaInAcres: area,
         soilHealthAdvice,
+        soilHealthScore,
         organicAlternative: `Apply FYM (Farm Yard Manure) @ 5 tonnes/acre + Biofertilizers (Rhizobium/PSB/KSB) to reduce chemical fertilizer requirement by 25%.`,
         applicationSchedule: requirements.notes,
+        cropRotationSuggestion: getCropRotationSuggestion(cropKey),
+        costOptimization: getCostOptimizationAdvice(totalCostPerAcre, soilHealthScore),
     };
 }
